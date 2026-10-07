@@ -828,8 +828,7 @@ function viewTag(){
     ${sugg.length ? `<h2>Vorschläge aus „Jetzt“ <span class="n">${sugg.length}</span></h2><div class="list">${sugg.map(t => `<div class="plan" style="grid-template-columns:1fr auto">${taskRow(t)}<button class="sugbtn" data-act="pin" data-id="${t.id}">+ Plan</button></div>`).join("")}</div>` : ""}`;
 }
 function outlookLink(t, day){
-  const [h, m] = t.planTime.split(":").map(Number);
-  const end = `${pad(Math.min(23, h + 1))}:${pad(m)}`;
+  const end = evEnd(t);
   const body = (areaById(t.area)?.name || "") + (t.note ? "\n\n" + t.note : "");
   return `https://outlook.office.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(t.title)}&startdt=${day}T${t.planTime}:00&enddt=${day}T${end}:00&body=${encodeURIComponent(body)}&path=%2Fcalendar%2Faction%2Fcompose`;
 }
