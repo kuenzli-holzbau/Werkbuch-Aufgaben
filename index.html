@@ -121,6 +121,13 @@ nav.tabs button[aria-current="page"]{color:var(--accent)}
 .login{position:fixed;inset:0;z-index:80;background:var(--bg);display:grid;place-items:center;padding:16px}
 .loginbox{background:var(--surface);border-radius:14px;box-shadow:var(--shadow);padding:22px 20px;width:100%;max-width:380px}
 .thumb img:not([src]){visibility:hidden}
+.plan .mv .olk.ok{background:var(--accent-soft);color:var(--accent)} .plan .mv .olk.wait{background:var(--surface2);color:var(--muted)}
+.plan .mv .olk svg{width:14px;height:14px}
+.plan .time.ro{display:block;width:84px;text-align:center;font-size:.8rem;color:#0F6CBD;background:none;border:1px dashed var(--line);padding:7px 4px;border-radius:8px}
+.task.calev{--ac:#0F6CBD;background:var(--surface2);box-shadow:none;grid-template-columns:1fr}
+.olbadge{display:inline-flex;align-items:center;gap:3px;color:#0F6CBD;font-weight:700}
+.olbadge svg{width:12px;height:12px}
+.msbox{border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:14px}
 .empty{color:var(--muted);background:var(--surface2);border:1px dashed var(--line);border-radius:var(--r);padding:16px;text-align:center}
 .summary{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 0}
 .pill{font-size:.85rem;font-weight:700;border-radius:999px;padding:4px 11px;background:var(--surface);box-shadow:var(--shadow)}
@@ -265,13 +272,31 @@ function addPeriod(s, unit, n){
   return iso(d);
 }
 function parseTime(v){ const m = String(v || "").trim().match(/^(\d{1,2})(?:[:.]?(\d{2}))?$/); if(!m || +m[1] > 23 || +(m[2] || 0) > 59) return null; return pad(+m[1]) + ":" + (m[2] || "00"); }
-function leadingTime(txt){ const m = String(txt).match(/^(\d{1,2})[:.]?(\d{2})\s+(.+)$/); if(m && +m[1] < 24 && +m[2] < 60) return { time: pad(+m[1]) + ":" + m[2], rest: m[3].trim() }; return { time: null, rest: String(txt).trim() }; }
+// "0800 Text" oder "0800-0930 Text"
+function leadingTime(txt){
+  const m = String(txt).match(/^(\d{1,2})[:.]?(\d{2})(?:\s*-\s*(\d{1,2})[:.]?(\d{2}))?\s+(.+)$/);
+  if(m && +m[1] < 24 && +m[2] < 60){
+    const time = pad(+m[1]) + ":" + m[2];
+    let end = m[3] !== undefined && +m[3] < 24 && +m[4] < 60 ? pad(+m[3]) + ":" + m[4] : null;
+    if(end && end <= time) end = null;
+    return { time, end, rest: m[5].trim() };
+  }
+  return { time: null, end: null, rest: String(txt).trim() };
+}
+function parseRange(v){ // "0800", "800", "0800-0930"
+  const p = String(v || "").trim().split(/\s*-\s*/);
+  const time = parseTime(p[0]); if(!time || p.length > 2) return null;
+  let end = p[1] ? parseTime(p[1]) : null; if(p[1] && !end) return null; if(end && end <= time) end = null;
+  return { time, end };
+}
+const toMin = t => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+const fromMin = n => { n = Math.max(0, Math.min(23 * 60 + 59, n)); return pad(Math.floor(n / 60)) + ":" + pad(n % 60); };
 // Schnelleingabe: "! 1200 Mittag" = hohe Priorität, 12:00 Uhr, Titel "Mittag"
 function parseQuick(txt){
   let t = String(txt || "").trim(), high = false;
   const m = t.match(/^!+\s*(.*)$/); if(m){ high = true; t = m[1]; }
-  const { time, rest } = leadingTime(t);
-  return { high, time, rest: (rest || t).trim() };
+  const { time, end, rest } = leadingTime(t);
+  return { high, time, end, rest: (rest || t).trim() };
 }
 const UNIT = {w:["Woche","Wochen"], m:["Monat","Monate"], y:["Jahr","Jahre"]};
 const recLabel = r => r ? `alle ${r.n>1? r.n+" "+UNIT[r.unit][1] : UNIT[r.unit][0]} · ${r.lead} T vorher` : "";
@@ -281,6 +306,7 @@ const I = {
   check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   rep:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 3l3 3-3 3"/><path d="M20 6H8a4 4 0 0 0-4 4v1M7 21l-3-3 3-3"/><path d="M4 18h12a4 4 0 0 0 4-4v-1"/></svg>',
   clip:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 11.5l-8.2 8.2a5 5 0 0 1-7-7L13 4.5a3.3 3.3 0 0 1 4.7 4.7L9.5 17.4a1.7 1.7 0 0 1-2.4-2.4l7.6-7.6"/></svg>',
+  cal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
   note:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4h14v16H5zM9 9h6M9 13h6"/></svg>'
 };
 
@@ -290,7 +316,7 @@ const FOCUS_LIMIT = 5; // ab so vielen hohen Prioritäten in "Jetzt" werden nied
 const prio = t => t.prio || 2;
 const PRIO = { 1: "Hoch", 2: "Normal", 3: "Niedrig" };
 let sb = null; // Supabase-Client
-const BUCKET = "anhaenge", COLS = ["areas", "tasks", "meetings"], APP_VERSION = "V1";
+const BUCKET = "anhaenge", COLS = ["areas", "tasks", "meetings"], APP_VERSION = "V2";
 const areaById = id => S.areas.find(a => a.id === id);
 const color = a => a ? a.color : "var(--muted)";
 const openTasks = () => S.tasks.filter(t => !t.done);
@@ -347,7 +373,7 @@ async function saveDoc(col, obj){
     await idbPut("docs", col + "/" + id, { col, id, data: JSON.parse(JSON.stringify(data)), deleted: false });
     await idbPut("outbox", col + "/" + id, Date.now() + Math.random());
   } catch(e){ toast("Lokales Speichern fehlgeschlagen. Ist der Speicher des Geräts voll?"); return false; }
-  kick();
+  kick(); if(col === "tasks") msKick();
   return true;
 }
 async function deleteDoc(col, id){
@@ -358,7 +384,11 @@ async function deleteDoc(col, id){
   kick();
 }
 const putTask = t => saveDoc("tasks", t);
-const dropTask = id => deleteDoc("tasks", id);
+async function dropTask(id){
+  const t = S.tasks.find(x => x.id === id);
+  if(t && t.ol && t.ol.id && MS.tok){ const d = (await idbGet("meta", "msdel").catch(() => null)) || []; d.push(t.ol.id); await idbPut("meta", "msdel", d); msKick(); }
+  return deleteDoc("tasks", id);
+}
 const putArea = a => saveDoc("areas", a);
 const putMeeting = m => saveDoc("meetings", m);
 
@@ -399,6 +429,168 @@ async function openFile(path){
   const w = window.open("", "_blank");
   try { const u = await blobURL(path); if(w) w.location.href = u; else location.href = u; }
   catch(e){ if(w) w.close(); toast("Datei ist offline nicht verfügbar."); }
+}
+
+/* ---------- Outlook (Microsoft 365) ---------- */
+// Anmeldung direkt bei Microsoft (Code-Flow mit PKCE), danach Microsoft Graph für den Kalender.
+// Die Verbindung gilt pro Gerät; die Zuordnung Aufgabe -> Termin (t.ol) wird mit den Aufgaben abgeglichen.
+const MS = { tok: null, cal: [], err: "", need: false, last: 0, busy: false };
+const MS_SCOPES = "openid profile offline_access User.Read Calendars.ReadWrite";
+const TZ = "W. Europe Standard Time", WB_CAT = "Werkbuch";
+function msCfg(){ const c = window.WERKBUCH_CONFIG || {}; return c.msClientId ? { client: c.msClientId, tenant: c.msTenant || "organizations" } : null; }
+const msRedirect = () => location.origin + location.pathname.replace(/index\.html$/, "");
+function msLoad(){ try { MS.tok = JSON.parse(localStorage.getItem("wb_ms") || "null"); } catch(e){ MS.tok = null; } }
+function msSave(){ try { if(MS.tok) localStorage.setItem("wb_ms", JSON.stringify(MS.tok)); else localStorage.removeItem("wb_ms"); } catch(e){} }
+const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const jwt = s => { try { const p = s.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"); return JSON.parse(decodeURIComponent(escape(atob(p + "===".slice((p.length + 3) % 4))))); } catch(e){ return {}; } };
+function msErrText(e){
+  const m = String((e && (e.message || e.code)) || e);
+  if(/AADSTS65001|consent/i.test(m)) return "Die Zustimmung für den Kalenderzugriff fehlt. Eure IT muss die App freigeben (Administratorzustimmung).";
+  if(/AADSTS90094|AADSTS90008|admin/i.test(m)) return "Eure Firma verlangt eine Freigabe durch einen Administrator.";
+  if(/AADSTS50011|redirect/i.test(m)) return "Die Rücksprungadresse in der App-Registrierung stimmt nicht.";
+  if(/AADSTS700016|AADSTS700054|not found in the directory/i.test(m)) return "Die Client-ID oder Tenant-ID stimmt nicht.";
+  if(/AADSTS9002326|cross-origin|Single-Page/i.test(m)) return "In der App-Registrierung muss die Plattform „Single-page application“ sein.";
+  if(/Failed to fetch|NetworkError|Load failed/i.test(m)) return "Keine Verbindung zu Microsoft.";
+  return m.slice(0, 200);
+}
+async function msConnect(){
+  const c = msCfg(); if(!c){ toast("Outlook ist noch nicht eingerichtet."); return; }
+  if(!navigator.onLine){ toast("Zum Verbinden braucht es Internet."); return; }
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(48)));
+  const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
+  const state = b64url(crypto.getRandomValues(new Uint8Array(16)));
+  try { localStorage.setItem("wb_ms_pkce", JSON.stringify({ verifier, state, back: S.tab })); } catch(e){}
+  const p = new URLSearchParams({ client_id: c.client, response_type: "code", redirect_uri: msRedirect(), response_mode: "query", scope: MS_SCOPES, state, code_challenge: challenge, code_challenge_method: "S256" });
+  if(MS.tok && MS.tok.user) p.set("login_hint", MS.tok.user); else p.set("prompt", "select_account");
+  location.href = `https://login.microsoftonline.com/${encodeURIComponent(c.tenant)}/oauth2/v2.0/authorize?${p}`;
+}
+function msDisconnect(){ MS.tok = null; MS.cal = []; MS.need = false; MS.err = ""; msSave(); idbDel("meta", "mscal").catch(() => {}); render(); toast("Outlook getrennt. Bestehende Termine bleiben im Kalender."); }
+async function msTokenRequest(params){
+  const c = msCfg();
+  const r = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(c.tenant)}/oauth2/v2.0/token`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ client_id: c.client, scope: MS_SCOPES, ...params }) });
+  const j = await r.json().catch(() => ({}));
+  if(!r.ok) throw Object.assign(new Error(j.error_description || j.error || ("HTTP " + r.status)), { code: j.error, status: r.status });
+  return j;
+}
+function msStore(j){
+  const id = jwt(j.id_token || "");
+  MS.tok = { access: j.access_token, exp: Date.now() + ((j.expires_in || 3600) - 120) * 1000, refresh: j.refresh_token || (MS.tok && MS.tok.refresh) || null,
+    user: id.preferred_username || id.email || (MS.tok && MS.tok.user) || "", name: id.name || (MS.tok && MS.tok.name) || "" };
+  MS.need = false; msSave();
+}
+async function msHandleRedirect(){
+  const q = new URLSearchParams(location.search);
+  if(!q.has("code") && !q.has("error")) return;
+  let pk = null; try { pk = JSON.parse(localStorage.getItem("wb_ms_pkce") || "null"); localStorage.removeItem("wb_ms_pkce"); } catch(e){}
+  history.replaceState(null, "", msRedirect());
+  if(!pk) return; // nicht von uns
+  if(pk.back) S.tab = pk.back;
+  if(q.get("error")){ MS.err = msErrText(q.get("error_description") || q.get("error")); S.msToast = "Outlook-Verbindung fehlgeschlagen."; return; }
+  if(pk.state !== q.get("state")){ MS.err = "Die Anmeldung ist abgelaufen. Bitte nochmals verbinden."; return; }
+  try {
+    msStore(await msTokenRequest({ grant_type: "authorization_code", code: q.get("code"), redirect_uri: msRedirect(), code_verifier: pk.verifier }));
+    MS.err = ""; S.msToast = "Outlook verbunden" + (MS.tok.user ? " mit " + MS.tok.user : "") + ".";
+  } catch(e){ MS.err = msErrText(e); S.msToast = "Outlook-Verbindung fehlgeschlagen."; }
+}
+async function msToken(force){
+  if(!MS.tok) return null;
+  if(!force && MS.tok.access && Date.now() < MS.tok.exp) return MS.tok.access;
+  if(!MS.tok.refresh){ MS.need = true; return null; }
+  try { msStore(await msTokenRequest({ grant_type: "refresh_token", refresh_token: MS.tok.refresh })); return MS.tok.access; }
+  catch(e){ if(e.status === 400 || e.status === 401){ MS.tok.refresh = null; MS.tok.access = null; MS.need = true; msSave(); return null; } throw e; }
+}
+async function graph(method, path, body, retried){
+  const tok = await msToken(); if(!tok) throw Object.assign(new Error("need"), { code: "need" });
+  const r = await fetch(path.startsWith("http") ? path : "https://graph.microsoft.com/v1.0" + path, { method,
+    headers: { Authorization: "Bearer " + tok, "Content-Type": "application/json", Prefer: `outlook.timezone="${TZ}"` }, body: body ? JSON.stringify(body) : undefined });
+  if(r.status === 401 && !retried){ MS.tok.exp = 0; return graph(method, path, body, true); }
+  if(r.status === 204) return null;
+  const j = await r.json().catch(() => null);
+  if(!r.ok) throw Object.assign(new Error((j && j.error && j.error.message) || ("HTTP " + r.status)), { status: r.status, code: j && j.error && j.error.code });
+  return j;
+}
+const wantsEvent = t => !t.done && !!t.plan && /^\d\d:\d\d$/.test(t.planTime || "");
+const evEnd = t => t.planEnd && t.planEnd > t.planTime ? t.planEnd : fromMin(toMin(t.planTime) + 60);
+const evSig = t => [t.title, t.plan, t.planTime, evEnd(t), prio(t), t.area || "", t.note || ""].join("|");
+function evPayload(t){
+  const a = areaById(t.area);
+  return { subject: t.title,
+    start: { dateTime: `${t.plan}T${t.planTime}:00`, timeZone: TZ }, end: { dateTime: `${t.plan}T${evEnd(t)}:00`, timeZone: TZ },
+    body: { contentType: "text", content: `${a ? "Bereich: " + a.name + "\n" : ""}${t.note ? "\n" + t.note + "\n" : ""}\nAus Werkbuch Aufgaben: ${msRedirect()}` },
+    importance: prio(t) === 1 ? "high" : "normal", categories: [WB_CAT], showAs: "busy", isReminderOn: true, reminderMinutesBeforeStart: 15 };
+}
+const curTask = id => S.tasks.find(x => x.id === id);
+let msRunning = false, msAgain = false, msT = null;
+function msKick(d = 1500){ if(!MS.tok || !msCfg()) return; clearTimeout(msT); msT = setTimeout(msSync, d); }
+async function msSync(){
+  if(!MS.tok || !msCfg() || !S.user) return;
+  if(!navigator.onLine) return;
+  if(msRunning){ msAgain = true; return; }
+  msRunning = true; MS.busy = true;
+  try {
+    // 1. Termine gelöschter Aufgaben entfernen
+    const dels = (await idbGet("meta", "msdel").catch(() => null)) || [];
+    while(dels.length){
+      try { await graph("DELETE", "/me/events/" + encodeURIComponent(dels[0])); } catch(e){ if(e.status !== 404) throw e; }
+      dels.shift(); await idbPut("meta", "msdel", dels);
+    }
+    // 2. Tagesplan-Einträge mit Uhrzeit -> Outlook
+    for(const t0 of [...S.tasks]){
+      const t = curTask(t0.id); if(!t) continue;
+      const ol = t.ol || null;
+      if(wantsEvent(t)){
+        const sig = evSig(t);
+        if(!ol || (!ol.id && ol.sig !== sig)){ // neu (oder nach Löschen in Outlook wieder geändert)
+          const gen = ol ? (ol.gen || 0) + 1 : 0;
+          const ev = await graph("POST", "/me/events", { ...evPayload(t), transactionId: `wb-${t.id}-${gen}` });
+          const c = curTask(t.id); if(c) await putTask({ ...c, ol: { id: ev.id, sig, gen } });
+        } else if(ol.id && ol.sig !== sig){
+          try { await graph("PATCH", "/me/events/" + encodeURIComponent(ol.id), evPayload(t)); const c = curTask(t.id); if(c) await putTask({ ...c, ol: { ...ol, sig } }); }
+          catch(e){ if(e.status === 404){ const c = curTask(t.id); if(c) await putTask({ ...c, ol: { gen: ol.gen || 0, sig } }); } else throw e; } // in Outlook gelöscht: nicht neu anlegen
+        }
+      } else if(ol && ol.id && !t.done){ // aus dem Plan genommen oder Uhrzeit entfernt
+        try { await graph("DELETE", "/me/events/" + encodeURIComponent(ol.id)); } catch(e){ if(e.status !== 404) throw e; }
+        const c = curTask(t.id); if(c) await putTask({ ...c, ol: null });
+      }
+    }
+    // 3. Kalender lesen (gestern bis in 3 Wochen)
+    const p0 = parse(addDays(today(), -1)), p1 = parse(addDays(today(), 22));
+    let url = `/me/calendarView?startDateTime=${encodeURIComponent(p0.toISOString())}&endDateTime=${encodeURIComponent(p1.toISOString())}&$select=id,subject,start,end,isAllDay,location,categories,isCancelled,createdDateTime,showAs&$orderby=start/dateTime&$top=200`;
+    const all = [];
+    for(let n = 0; url && n < 10; n++){ const j = await graph("GET", url); all.push(...(j.value || [])); url = j["@odata.nextLink"] || null; }
+    MS.cal = all.filter(e => !e.isCancelled).map(e => ({ id: e.id, subject: e.subject || "(ohne Titel)", start: e.start.dateTime.slice(0, 16), end: e.end.dateTime.slice(0, 16),
+      allDay: !!e.isAllDay, loc: (e.location && e.location.displayName) || "", wb: (e.categories || []).includes(WB_CAT), created: e.createdDateTime || "", free: e.showAs === "free" }));
+    try { await idbPut("meta", "mscal", { at: Date.now(), cal: MS.cal }); } catch(e){}
+    // 4. In Outlook verschobene Werkbuch-Termine übernehmen; verwaiste Termine entfernen
+    const outboxEmpty = !(await idbKeys("outbox")).length;
+    for(const e of MS.cal.filter(e => e.wb)){
+      const t = S.tasks.find(x => x.ol && x.ol.id === e.id);
+      if(!t){
+        const old = e.created && Date.now() - new Date(e.created).getTime() > 15 * 60000;
+        if(old && outboxEmpty && lastSync && S.status === "ok"){ try { await graph("DELETE", "/me/events/" + encodeURIComponent(e.id)); } catch(_){} MS.cal = MS.cal.filter(x => x.id !== e.id); }
+        continue;
+      }
+      if(t.done || evSig(t) !== t.ol.sig) continue; // lokale Änderung hat Vorrang
+      const day = e.start.slice(0, 10), st = e.start.slice(11, 16), en = e.end.slice(0, 10) === day ? e.end.slice(11, 16) : null;
+      if(day !== t.plan || st !== t.planTime || (en && en !== evEnd(t))){
+        const nt = { ...t, plan: day, planTime: st, planEnd: en, due: t.due === t.plan ? day : t.due };
+        nt.ol = { ...t.ol, sig: evSig(nt) };
+        await putTask(nt);
+      }
+    }
+    MS.last = Date.now(); MS.err = "";
+  } catch(e){
+    if(e.code === "need") MS.need = true;
+    else { MS.err = msErrText(e); console.warn("Outlook:", e); msT = setTimeout(msSync, 60000); }
+  } finally {
+    msRunning = false; MS.busy = false;
+    if(!document.querySelector(".sheet, #anno, #viewer")) scheduleRender();
+    if(msAgain){ msAgain = false; msKick(500); }
+  }
+}
+function calOfDay(day){
+  return MS.cal.filter(e => !e.wb && (e.allDay ? e.start.slice(0, 10) <= day && day < e.end.slice(0, 10) : e.start.slice(0, 10) === day))
+    .sort((a, b) => (b.allDay - a.allDay) || a.start.localeCompare(b.start));
 }
 
 /* ---------- Abgleich mit Supabase ---------- */
@@ -511,7 +703,7 @@ function taskRow(t, opts = {}){
       </div>
       ${nAtt || t.note ? attStrip(t) : ""}
     </div>
-    ${t.due ? `<span class="due ${cls}">${esc(dueLabel(t.due))}${t.planTime && t.plan === t.due ? " " + esc(t.planTime) : ""}</span>` : `<span></span>`}
+    ${t.due ? `<span class="due ${cls}">${esc(dueLabel(t.due))}${t.planTime && t.plan === t.due ? " " + esc(t.planTime) + (t.planEnd ? "–" + esc(t.planEnd) : "") : ""}</span>` : `<span></span>`}
   </div>`;
 }
 function attStrip(t){
@@ -580,6 +772,7 @@ function viewJetzt(){
       ${tod.length ? `<span class="pill today">${tod.length} heute</span>` : ""}
       <span class="pill">${soon.length} in den nächsten Tagen</span>
       ${nHigh ? `<span class="pill late">${nHigh} hohe Priorität</span>` : ""}
+      ${MS.tok && calOfDay(today()).filter(e => !e.allDay && e.end.slice(11, 16) > new Date().toTimeString().slice(0, 5)).length ? `<button class="pill" data-tab="tag">${I.cal.replace("<svg", '<svg width="13" height="13" style="vertical-align:-2px"')} ${calOfDay(today()).filter(e => !e.allDay && e.end.slice(11, 16) > new Date().toTimeString().slice(0, 5)).length} Termine heute</button>` : ""}
     </div>
     ${focus && lowHidden.length ? `<div class="hidden-note"><span>Fokus: ${nHigh} Aufgaben mit hoher Priorität, darum ${lowHidden.length} mit niedriger ausgeblendet.</span><button class="btn ghost" data-act="showlow">Trotzdem anzeigen</button></div>` : ""}
     ${S.showLow && nHigh >= FOCUS_LIMIT && lowHidden.length ? `<div class="hidden-note"><span>Niedrige Prioritäten werden angezeigt.</span><button class="btn ghost" data-act="showlow">Wieder ausblenden</button></div>` : ""}`;
@@ -604,21 +797,33 @@ function viewTag(){
   const sugg = openTasks().filter(t => !planned.has(t.id) && (isVisibleNow(t) || (prio(t) === 1 && !t.rec))).sort(byPrio).slice(0, 12);
   const d = parse(day);
   const title = isToday ? "Heute" : day === addDays(today(), 1) ? "Morgen" : fmt(day);
+  const ms = !!MS.tok, cal = ms ? calOfDay(day) : [];
   const row = (t, i) => `<div class="plan">
-      <input class="time" type="text" inputmode="numeric" maxlength="5" placeholder="0800" value="${esc(t.planTime || "")}" data-act="ptime" data-id="${t.id}" aria-label="Uhrzeit für ${esc(t.title)}">
+      <input class="time" type="text" inputmode="numeric" maxlength="11" placeholder="0800" value="${esc(t.planTime || "")}" data-act="ptime" data-id="${t.id}" aria-label="Uhrzeit für ${esc(t.title)}">
       ${taskRow(t, { inPlan: true })}
-      <div class="mv"><button data-act="pup" data-id="${t.id}" aria-label="Nach oben" ${i === 0 ? "disabled" : ""}>▲</button><button data-act="pout" data-id="${t.id}" aria-label="Aus Tagesplan entfernen">✕</button>${t.planTime && !t.done ? `<a class="olk" href="${outlookLink(t, day)}" target="_blank" rel="noopener" aria-label="In Outlook eintragen" title="In Outlook eintragen">OL</a>` : ""}</div>
+      <div class="mv"><button data-act="pup" data-id="${t.id}" aria-label="Nach oben" ${i === 0 ? "disabled" : ""}>▲</button><button data-act="pout" data-id="${t.id}" aria-label="Aus Tagesplan entfernen">✕</button>${t.planTime && !t.done ? (ms ? (t.ol && t.ol.id ? `<span class="olk ok" title="Steht im Outlook-Kalender">${I.cal}</span>` : `<span class="olk wait" title="Wird in Outlook eingetragen">…</span>`) : `<a class="olk" href="${outlookLink(t, day)}" target="_blank" rel="noopener" aria-label="In Outlook eintragen" title="In Outlook eintragen">OL</a>`) : ""}</div>
     </div>`;
+  const calRow = e => `<div class="plan calrow">
+      <span class="time ro mono">${e.allDay ? "ganzer Tag" : e.start.slice(11, 16)}</span>
+      <div class="task calev"><div class="body"><div class="t">${esc(e.subject)}</div><div class="meta">${e.allDay ? "" : `<span class="mono">${e.start.slice(11, 16)}–${e.end.slice(11, 16)}</span>`}${e.loc ? `<span>${esc(e.loc)}</span>` : ""}<span class="olbadge">${I.cal} Outlook</span></div></div></div>
+      <span></span></div>`;
+  const merged = [...open.map((t, i) => ({ k: t.planTime || "99:99", h: row(t, i) })), ...cal.map(e => ({ k: e.allDay ? "00:00" : e.start.slice(11, 16), h: calRow(e) }))]
+    .sort((a, b) => a.k.localeCompare(b.k));
+  const cfgMs = !!msCfg();
+  const msBar = !cfgMs ? "" : !ms ? `<div class="hidden-note"><span>Outlook-Termine hier sehen und Einträge mit Uhrzeit automatisch in den Kalender übernehmen.</span><button class="btn pri" data-act="msconnect">Outlook verbinden</button></div>`
+    : MS.need ? `<div class="hidden-note"><span>Die Outlook-Verbindung ist abgelaufen.</span><button class="btn pri" data-act="msconnect">Erneuern</button></div>`
+    : MS.err ? `<div class="hidden-note" style="color:var(--late)"><span>Outlook: ${esc(MS.err)}</span><button class="btn ghost" data-act="msretry">Nochmals</button></div>` : "";
   return `<h1>Tagesplan ${esc(title)}</h1>
     <div class="daynav">
       <button class="chip" data-act="day" data-id="${addDays(day, -1)}">‹ ${fmt(addDays(day, -1))}</button>
       ${isToday ? "" : `<button class="chip" data-act="day" data-id="${today()}">Heute</button>`}
       <button class="chip" data-act="day" data-id="${addDays(day, 1)}">${fmt(addDays(day, 1))} ›</button>
-      <span class="sub mono">${open.length} offen · ${done.length} erledigt</span>
+      <span class="sub mono">${open.length} offen · ${done.length} erledigt${ms ? ` · ${cal.length} Outlook` : ""}</span>
     </div>
+    ${msBar}
     ${left.length ? `<div class="hidden-note"><span>${left.length} ${left.length === 1 ? "geplante Aufgabe ist" : "geplante Aufgaben sind"} von früheren Tagen liegen geblieben.</span><button class="btn ghost" data-act="carry">Auf heute übernehmen</button></div>` : ""}
-    ${open.length ? `<div class="list" style="margin-top:12px">${open.map(row).join("")}</div>` : `<div class="empty" style="margin-top:12px">Noch nichts geplant. Wähle unten Vorschläge aus oder schreib einen Termin dazu.</div>`}
-    <div class="addrow"><input type="text" id="padd" placeholder="Eintrag für ${esc(title.toLowerCase() === "heute" ? "heute" : fmt(day))}, z. B. 1000 Baustellenbesuch" aria-label="Eintrag zum Tagesplan hinzufügen"><button class="btn pri" data-act="padd">Hinzufügen</button></div>
+    ${merged.length ? `<div class="list" style="margin-top:12px">${merged.map(x => x.h).join("")}</div>` : `<div class="empty" style="margin-top:12px">Noch nichts geplant. Wähle unten Vorschläge aus oder schreib einen Termin dazu.</div>`}
+    <div class="addrow"><input type="text" id="padd" placeholder="Eintrag für ${esc(title.toLowerCase() === "heute" ? "heute" : fmt(day))}, z. B. 1000-1130 Baustellenbesuch" aria-label="Eintrag zum Tagesplan hinzufügen"><button class="btn pri" data-act="padd">Hinzufügen</button></div>
     ${done.length ? `<h2>Erledigt <span class="n">${done.length}</span></h2><div class="list">${done.map(t => taskRow(t, { inPlan: true })).join("")}</div>` : ""}
     ${sugg.length ? `<h2>Vorschläge aus „Jetzt“ <span class="n">${sugg.length}</span></h2><div class="list">${sugg.map(t => `<div class="plan" style="grid-template-columns:1fr auto">${taskRow(t)}<button class="sugbtn" data-act="pin" data-id="${t.id}">+ Plan</button></div>`).join("")}</div>` : ""}`;
 }
@@ -777,19 +982,19 @@ function drawCapture(){
     <div class="row" style="justify-content:flex-end"><button class="btn ghost" data-act="close">Abbrechen</button><button class="btn pri" data-act="capsave">Erfassen</button></div>`);
 }
 function capHint(v){
-  const { high, time, rest } = parseQuick(v); const parts = [];
+  const { high, time, end, rest } = parseQuick(v); const parts = [];
   if(high && rest) parts.push("Hohe Priorität");
-  if(time && rest) parts.push(`Uhrzeit ${time} Uhr${cap && cap.due && cap.due !== today() ? ", " + fmt(cap.due) : ", heute"}, kommt in den Tagesplan`);
+  if(time && rest) parts.push(`Uhrzeit ${time}${end ? "–" + end : ""} Uhr${cap && cap.due && cap.due !== today() ? ", " + fmt(cap.due) : ", heute"}, kommt in den Tagesplan`);
   return parts.length ? "Erkannt: " + parts.join(" · ") + "." : "";
 }
 async function saveCapture(){
   const raw = ($("#ct").value || "").trim();
   if(!raw){ $("#ct").focus(); return; }
-  const { high, time, rest } = parseQuick(raw);
+  const { high, time, end, rest } = parseQuick(raw);
   const title = rest || raw;
   const due = cap.due || (time ? today() : null);
   const t = { id: uid(), title, area: cap.area || null, due, prio: high ? 1 : (cap.prio || 2), rec: null, note: "", att: [], done: false, created: today() };
-  if(time){ t.plan = due; t.planTime = time; t.planOrder = planOf(due).length; }
+  if(time){ t.plan = due; t.planTime = time; t.planEnd = end || null; t.planOrder = planOf(due).length; }
   const files = cap.files; closeSheet();
   await putTask(t);
   toast((high ? "Hohe Priorität. " : "") + (time ? `Erfasst für ${t.due === today() ? "heute" : fmt(t.due)} ${time} Uhr.` : t.area ? "Erfasst." : "Im Eingang erfasst."));
@@ -805,7 +1010,7 @@ function openTask(id){
     <div class="field"><label for="et">Titel</label><input type="text" id="et" value="${esc(t.title)}"></div>
     <div class="grid2">
       <div class="field"><label for="ea">Bereich</label><select id="ea"><option value="">Eingang</option>${areas.map(a => `<option value="${a.id}" ${t.area === a.id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select></div>
-      <div class="field"><label for="ed">Fällig</label><div class="row" style="flex-wrap:nowrap"><input type="date" id="ed" value="${esc(t.due || "")}" style="flex:1;min-width:0"><input type="text" id="etime" inputmode="numeric" maxlength="5" placeholder="Zeit" value="${esc(t.plan && t.plan === t.due ? (t.planTime || "") : "")}" aria-label="Uhrzeit, z. B. 0800" style="width:76px;flex:none" class="mono"></div></div>
+      <div class="field"><label for="ed">Fällig</label><div class="row" style="flex-wrap:nowrap"><input type="date" id="ed" value="${esc(t.due || "")}" style="flex:1;min-width:0"><input type="text" id="etime" inputmode="numeric" maxlength="11" placeholder="Zeit" value="${esc(t.plan && t.plan === t.due && t.planTime ? t.planTime + (t.planEnd ? "-" + t.planEnd : "") : "")}" aria-label="Uhrzeit, z. B. 0800 oder 0800-0930" style="width:110px;flex:none" class="mono"></div></div>
     </div>
     <div class="field"><span class="lbl">Priorität</span><div class="chips" id="eprio">
       ${[1,2,3].map(p => `<button class="chip" data-act="ep" data-id="${p}" aria-pressed="${prio(t) === p}">${PRIO[p]}</button>`).join("")}
@@ -824,7 +1029,8 @@ function openTask(id){
       <p class="sub" style="font-size:.85rem">Tippe auf ein Bild, um mit Stift zu zeichnen oder Pins zu setzen.</p>
     </div>
     ${!t.done ? `<div class="row" style="margin-bottom:10px"><span class="lbl">Tagesplan</span>${t.plan ? `<span class="tagp">geplant ${t.plan === today() ? "heute" : fmt(t.plan)}</span>` : ""}<button class="chip" data-act="tplan" data-id="${t.id}" data-day="${today()}">Heute</button><button class="chip" data-act="tplan" data-id="${t.id}" data-day="${addDays(today(), 1)}">Morgen</button></div>` : ""}
-    ${outlook ? `<p><a href="${outlook}" target="_blank" rel="noopener">In Outlook-Kalender eintragen ↗</a></p>` : ""}
+    ${MS.tok && t.ol && t.ol.id && wantsEvent(t) ? `<p class="sub">${I.cal.replace("<svg", '<svg width="14" height="14" style="vertical-align:-2px"')} Steht im Outlook-Kalender. Änderungen werden automatisch übernommen.</p>` : MS.tok && wantsEvent(t) ? `<p class="sub">Wird in den Outlook-Kalender eingetragen.</p>` : MS.tok && t.due && !t.planTime ? `<p class="sub">Mit einer Uhrzeit kommt die Aufgabe automatisch in deinen Outlook-Kalender.</p>` : ""}
+    ${outlook && !MS.tok ? `<p><a href="${outlook}" target="_blank" rel="noopener">In Outlook-Kalender eintragen ↗</a></p>` : ""}
     <div class="row" style="justify-content:space-between;margin-top:8px">
       <button class="btn danger" data-act="del" data-id="${t.id}">Löschen</button>
       <div class="row"><button class="btn ghost" data-act="close">Schliessen</button><button class="btn pri" data-act="tsave" data-id="${t.id}">Speichern</button></div>
@@ -842,10 +1048,10 @@ async function saveTaskForm(id, silent){
   const title = $("#et").value.trim() || t.title;
   const rec = $("#er").checked ? { unit: $("#eru").value, n: Math.max(1, +$("#ern").value || 1), lead: Math.max(0, +$("#erl").value || 0) } : null;
   let due = $("#ed").value || null;
-  const tv = ($("#etime").value || "").trim(); const time = tv ? parseTime(tv) : null;
-  if(tv && !time){ toast("Uhrzeit bitte als 0800 oder 1430 eingeben."); $("#etime").focus(); return; }
+  const tv = ($("#etime").value || "").trim(); const rg = tv ? parseRange(tv) : null; const time = rg ? rg.time : null;
+  if(tv && !time){ toast("Uhrzeit bitte als 0800, 1430 oder 0800-0930 eingeben."); $("#etime").focus(); return; }
   if((rec || time) && !due) due = today();
-  const planPart = time ? { plan: due, planTime: time, planOrder: t.plan === due ? (t.planOrder ?? 0) : planOf(due).length }
+  const planPart = time ? { plan: due, planTime: time, planEnd: rg.end || null, planOrder: t.plan === due ? (t.planOrder ?? 0) : planOf(due).length }
                  : (t.plan && t.plan === t.due && t.planTime ? { planTime: null } : {});
   const pb = document.querySelector("[data-act=ep][aria-pressed=true]");
   await putTask({ ...t, title, area: $("#ea").value || null, due, rec, note: $("#en").value, prio: pb ? +pb.dataset.id : prio(t), ...planPart });
@@ -1133,7 +1339,10 @@ document.addEventListener("click", async e => {
     case "view": viewAtt(id, +el.dataset.i); break;
     case "openfile": if(el.dataset.path) openFile(el.dataset.path); break;
     case "menu": openMenu(); break;
-    case "syncnow": closeSheet(); kick(0); break;
+    case "syncnow": closeSheet(); kick(0); msKick(0); break;
+    case "msconnect": msConnect(); break;
+    case "msretry": MS.err = ""; closeSheet(); msKick(0); render(); break;
+    case "msoff": if(el.dataset.sure){ closeSheet(); msDisconnect(); } else { el.dataset.sure = "1"; el.textContent = "Wirklich trennen?"; } break;
     case "logout": if(el.dataset.sure){ closeSheet(); logout(); } else { el.dataset.sure = "1"; el.textContent = "Wirklich abmelden?"; } break;
     case "note": viewNote(id); break;
     case "undo": if(undo){ putTask(undo); undo = null; } e.target.closest(".toast")?.remove(); break;
@@ -1182,17 +1391,17 @@ async function addPlanEntry(){
   inp.value = "";
   const day = S.day || today();
   const lt = parseQuick(txt); const time = lt.time; txt = lt.rest || txt;
-  await putTask({ id: uid(), title: txt, area: null, due: day, prio: lt.high ? 1 : 2, rec: null, note: "", att: [], done: false, created: today(), plan: day, planTime: time, planOrder: planOf(day).length, entry: true });
+  await putTask({ id: uid(), title: txt, area: null, due: day, prio: lt.high ? 1 : 2, rec: null, note: "", att: [], done: false, created: today(), plan: day, planTime: time, planEnd: lt.end || null, planOrder: planOf(day).length, entry: true });
   setTimeout(() => $("#padd") && $("#padd").focus(), 0);
 }
 document.addEventListener("change", e => {
   const el = e.target;
   if(el.dataset.act === "ptime"){ const t = S.tasks.find(x => x.id === el.dataset.id); if(!t) return;
-    const v = el.value.trim(); let time = null;
-    if(v){ const m = v.match(/^(\d{1,2})[:.]?(\d{2})$/) || v.match(/^(\d{1,2})()$/);
-      if(!m || +m[1] > 23 || +(m[2] || 0) > 59){ el.value = t.planTime || ""; toast("Uhrzeit bitte als 0800 oder 1430 eingeben."); return; }
-      time = pad(+m[1]) + ":" + (m[2] || "00"); }
-    putTask({ ...t, planTime: time }); return; }
+    const v = el.value.trim(); let r = { time: null, end: null };
+    if(v){ r = parseRange(v); if(!r){ el.value = t.planTime || ""; toast("Uhrzeit bitte als 0800, 1430 oder 0800-0930 eingeben."); return; } }
+    let end = r.end;
+    if(!end && r.time && t.planTime && t.planEnd) end = fromMin(toMin(r.time) + toMin(t.planEnd) - toMin(t.planTime)); // Dauer beibehalten
+    putTask({ ...t, planTime: r.time, planEnd: r.time ? end : null }); return; }
   if(el.id === "cpf"){ cap.title = $("#ct").value; cap.files = [...el.files]; drawCapture(); }
   else if(el.id === "cpdate"){ cap.title = $("#ct").value; cap.due = el.value; drawCapture(); }
   else if(el.dataset.act === "sgt"){ meetDraft.result.aufgaben[+el.dataset.i]._skip = !el.checked; }
@@ -1219,6 +1428,13 @@ function openMenu(){
     <p class="sub">Angemeldet als <b>${esc(S.user ? S.user.email : "")}</b></p>
     <p>${S.status === "ok" ? "Alles abgeglichen" : S.status === "offline" ? "Offline. Änderungen werden abgeglichen, sobald wieder Internet da ist." : S.status === "error" ? "Der Abgleich ist gestört: " + esc(syncErr) : "Abgleich läuft …"}${lastSync ? ` <span class="sub">· zuletzt ${new Date(lastSync).toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" })}</span>` : ""}</p>
     <div class="row" style="margin-top:12px"><button class="btn pri" data-act="syncnow">Jetzt abgleichen</button><button class="btn danger" data-act="logout">Abmelden</button></div>
+    <div class="msbox"><div class="lbl">Outlook-Kalender</div>
+      ${!msCfg() ? `<p class="sub">Noch nicht eingerichtet. Es fehlt die App-Registrierung bei Microsoft.</p>`
+        : !MS.tok ? `<p class="sub">Nicht verbunden. Einträge im Tagesplan mit Uhrzeit kommen nach dem Verbinden automatisch in deinen Kalender.</p><button class="btn pri" data-act="msconnect">Outlook verbinden</button>`
+        : `<p>Verbunden${MS.tok.user ? " mit <b>" + esc(MS.tok.user) + "</b>" : ""}.${MS.last ? ` <span class="sub">Zuletzt abgeglichen ${new Date(MS.last).toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" })}</span>` : ""}</p>
+           ${MS.need ? `<p style="color:var(--late)">Die Verbindung ist abgelaufen.</p>` : ""}${MS.err ? `<p style="color:var(--late)">${esc(MS.err)}</p>` : ""}
+           <div class="row">${MS.need ? `<button class="btn pri" data-act="msconnect">Erneuern</button>` : `<button class="btn" data-act="msretry">Kalender abgleichen</button>`}<button class="btn ghost" data-act="msoff">Trennen</button></div>`}
+    </div>
     <p class="sub mono" style="margin-top:16px;font-size:.75rem">Version ${APP_VERSION}</p>`);
 }
 
@@ -1234,20 +1450,27 @@ async function startSession(user){
   await idbPut("meta", "email", user.email || "");
   S.user = { id: user.id, email: user.email };
   $("#login").hidden = true;
-  await loadLocal(); render();
+  await loadLocal();
+  try { const c = await idbGet("meta", "mscal"); if(c && MS.tok) MS.cal = c.cal || []; } catch(e){}
+  render();
+  if(S.msToast){ toast(S.msToast); S.msToast = null; }
   if(sb){ subscribeLive(); kick(0); }
+  msKick(2500);
 }
 async function logout(){
   if(!sb) return;
   const pend = (await idbKeys("outbox")).length;
   if(pend && navigator.onLine){ await sync(); }
   try { await sb.auth.signOut(); } catch(e){}
+  try { localStorage.removeItem("wb_ms"); } catch(e){}
   for(const st of ["docs", "outbox", "blobs", "meta"]) await idbClear(st).catch(() => {});
   location.reload();
 }
 async function boot(){
   if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
   setStatus("load");
+  msLoad();
+  await msHandleRedirect();
   const cfg = window.WERKBUCH_CONFIG || {};
   if(window.supabase && cfg.url && cfg.key){
     sb = window.supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
@@ -1272,10 +1495,11 @@ async function boot(){
     if(data.session) startSession(data.user);
     else $("#lerr").textContent = "Konto erstellt. Bitte zuerst den Link in der Bestätigungs-E-Mail öffnen, dann anmelden.";
   });
-  window.addEventListener("online", () => kick(0));
+  window.addEventListener("online", () => { kick(0); msKick(0); });
   window.addEventListener("offline", () => setStatus("offline"));
-  document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") kick(0); });
+  document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible"){ kick(0); msKick(500); } });
   setInterval(() => kick(0), 120000);
+  setInterval(() => msKick(0), 300000);
 
   // Sitzung: online über Supabase, offline aus dem Gerätespeicher
   if(sb){
