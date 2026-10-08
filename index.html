@@ -65,9 +65,9 @@ nav.tabs button[aria-current="page"]{color:var(--accent)}
 .fab{position:fixed;right:18px;bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:21;width:58px;height:58px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);box-shadow:0 6px 18px rgba(0,0,0,.22);display:grid;place-items:center}
 .fab svg{width:28px;height:28px}
 @media (min-width:900px){
-  nav.tabs{position:sticky;top:env(safe-area-inset-top,0px);bottom:auto;border-top:0;border-bottom:1px solid var(--line)}
+  nav.tabs{position:fixed;top:0;padding-top:env(safe-area-inset-top,0px);bottom:auto;border-top:0;border-bottom:1px solid var(--line)}
   nav.tabs button{flex-direction:row;justify-content:center;padding:14px 8px;font-size:.9rem;gap:8px}
-  .wrap{padding-block:16px 60px}
+  .wrap{padding-block:72px 60px}
   .fab{bottom:28px;right:28px}
 }
 /* task rows */
@@ -128,6 +128,11 @@ nav.tabs button[aria-current="page"]{color:var(--accent)}
 .olbadge{display:inline-flex;align-items:center;gap:3px;color:#0F6CBD;font-weight:700}
 .olbadge svg{width:12px;height:12px}
 .msbox{border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:14px}
+.task .side{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.whotag{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:2px 9px 2px 3px;font-size:.8rem;font-weight:700;color:var(--ink);white-space:nowrap;max-width:11em;overflow:hidden;text-overflow:ellipsis}
+.av{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#5B4BB7;color:#fff;font-size:.62rem;font-weight:800;letter-spacing:0;flex:none}
+.chip.who{padding:4px 11px 4px 4px}
+.chip.who[aria-pressed="true"] .av{background:var(--accent-ink);color:var(--accent)}
 .empty{color:var(--muted);background:var(--surface2);border:1px dashed var(--line);border-radius:var(--r);padding:16px;text-align:center}
 .summary{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 0}
 .pill{font-size:.85rem;font-weight:700;border-radius:999px;padding:4px 11px;background:var(--surface);box-shadow:var(--shadow)}
@@ -295,8 +300,10 @@ const fromMin = n => { n = Math.max(0, Math.min(23 * 60 + 59, n)); return pad(Ma
 function parseQuick(txt){
   let t = String(txt || "").trim(), high = false;
   const m = t.match(/^!+\s*(.*)$/); if(m){ high = true; t = m[1]; }
+  let who = null; // "@Tobi" irgendwo im Text = an Tobi delegiert
+  t = t.replace(/(^|\s)@([\p{L}][\p{L}\p{N}_.-]*)/u, (all, sp, name) => { who = name.replace(/_/g, " "); return sp; }).replace(/\s+/g, " ").trim();
   const { time, end, rest } = leadingTime(t);
-  return { high, time, end, rest: (rest || t).trim() };
+  return { high, time, end, who, rest: (rest || t).trim() };
 }
 const UNIT = {w:["Woche","Wochen"], m:["Monat","Monate"], y:["Jahr","Jahre"]};
 const recLabel = r => r ? `alle ${r.n>1? r.n+" "+UNIT[r.unit][1] : UNIT[r.unit][0]} · ${r.lead} T vorher` : "";
@@ -315,8 +322,17 @@ const S = { areas: [], tasks: [], meetings: [], tab: "jetzt", area: null, listAr
 const FOCUS_LIMIT = 5; // ab so vielen hohen Prioritäten in "Jetzt" werden niedrige ausgeblendet
 const prio = t => t.prio || 2;
 const PRIO = { 1: "Hoch", 2: "Normal", 3: "Niedrig" };
+// Delegieren: Mitarbeitende werden aus den bisherigen Zuweisungen vorgeschlagen (häufigste zuerst)
+const cleanWho = v => String(v || "").replace(/\s+/g, " ").trim().slice(0, 40);
+function people(){
+  const n = new Map();
+  for(const t of S.tasks) if(t.who){ const k = t.who.toLowerCase(); const e = n.get(k) || { name: t.who, c: 0, open: 0 }; e.c++; if(!t.done) e.open++; n.set(k, e); }
+  return [...n.values()].sort((a, b) => b.c - a.c || a.name.localeCompare(b.name));
+}
+function canonWho(v){ v = cleanWho(v); if(!v) return null; const hit = people().find(p => p.name.toLowerCase() === v.toLowerCase()); return hit ? hit.name : v; }
+const initials = n => n.split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
 let sb = null; // Supabase-Client
-const BUCKET = "anhaenge", COLS = ["areas", "tasks", "meetings"], APP_VERSION = "V2";
+const BUCKET = "anhaenge", COLS = ["areas", "tasks", "meetings"], APP_VERSION = "V3";
 const areaById = id => S.areas.find(a => a.id === id);
 const color = a => a ? a.color : "var(--muted)";
 const openTasks = () => S.tasks.filter(t => !t.done);
@@ -703,7 +719,10 @@ function taskRow(t, opts = {}){
       </div>
       ${nAtt || t.note ? attStrip(t) : ""}
     </div>
-    ${t.due ? `<span class="due ${cls}">${esc(dueLabel(t.due))}${t.planTime && t.plan === t.due ? " " + esc(t.planTime) + (t.planEnd ? "–" + esc(t.planEnd) : "") : ""}</span>` : `<span></span>`}
+    <div class="side">
+      ${t.due ? `<span class="due ${cls}">${esc(dueLabel(t.due))}${t.planTime && t.plan === t.due ? " " + esc(t.planTime) + (t.planEnd ? "–" + esc(t.planEnd) : "") : ""}</span>` : ""}
+      ${t.who ? `<button class="whotag" data-act="whof" data-id="${esc(t.who)}" title="Delegiert an ${esc(t.who)}"><span class="av">${esc(initials(t.who))}</span>${esc(t.who)}</button>` : ""}
+    </div>
   </div>`;
 }
 function attStrip(t){
@@ -829,7 +848,7 @@ function viewTag(){
 }
 function outlookLink(t, day){
   const end = evEnd(t);
-  const body = (areaById(t.area)?.name || "") + (t.note ? "\n\n" + t.note : "");
+  const body = (areaById(t.area)?.name || "") + (t.who ? "\nDelegiert an: " + t.who : "") + (t.note ? "\n\n" + t.note : "");
   return `https://outlook.office.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(t.title)}&startdt=${day}T${t.planTime}:00&enddt=${day}T${end}:00&body=${encodeURIComponent(body)}&path=%2Fcalendar%2Faction%2Fcompose`;
 }
 async function addToPlan(id, day){
@@ -885,7 +904,12 @@ function viewListe(){
   const areas = S.areas.filter(a => !a.archived);
   let ts = openTasks().filter(t => !isHiddenRec(t));
   if(S.listArea !== "alle") ts = ts.filter(t => (t.area || "__inbox") === S.listArea);
-  if(S.q) ts = ts.filter(t => (t.title + " " + (t.note || "")).toLowerCase().includes(S.q.toLowerCase()));
+  const ppl = people().filter(p => p.open);
+  const W = S.listWho || "alle";
+  if(W === "__me") ts = ts.filter(t => !t.who);
+  else if(W === "__del") ts = ts.filter(t => t.who);
+  else if(W !== "alle") ts = ts.filter(t => (t.who || "").toLowerCase() === W.toLowerCase());
+  if(S.q) ts = ts.filter(t => (t.title + " " + (t.note || "") + " " + (t.who || "")).toLowerCase().includes(S.q.toLowerCase()));
   ts.sort(S.listSort === "prio" ? byPrio : byDue);
   return `<h1>Alle offenen Aufgaben</h1><p class="sub">Kompakt zum Abarbeiten am PC. Geplante Wiederholungen sind ausgeblendet.</p>
     <div class="toolbar">
@@ -897,6 +921,12 @@ function viewListe(){
       <button class="chip" data-act="lf" data-id="__inbox" aria-pressed="${S.listArea === "__inbox"}">Eingang</button>
       ${areas.map(a => `<button class="chip" data-act="lf" data-id="${a.id}" aria-pressed="${S.listArea === a.id}"><span class="dot" style="--ac:${a.color}"></span>${esc(a.name)}</button>`).join("")}
     </div>
+    ${ppl.length ? `<div class="chips" role="group" aria-label="Nach Person filtern" style="margin-top:8px">
+      <button class="chip" data-act="lw" data-id="alle" aria-pressed="${W === "alle"}">Alle Personen</button>
+      <button class="chip" data-act="lw" data-id="__me" aria-pressed="${W === "__me"}">Selbst erledigen</button>
+      <button class="chip" data-act="lw" data-id="__del" aria-pressed="${W === "__del"}">Alle delegierten</button>
+      ${ppl.map(p => `<button class="chip who" data-act="lw" data-id="${esc(p.name)}" aria-pressed="${W.toLowerCase() === p.name.toLowerCase()}"><span class="av">${esc(initials(p.name))}</span>${esc(p.name)} <span class="mono">${p.open}</span></button>`).join("")}
+    </div>` : ""}
     <div class="compact" style="margin-top:12px">${ts.length ? `<div class="list">${ts.map(t => taskRow(t)).join("")}</div>` : `<div class="empty">Keine passenden Aufgaben.</div>`}</div>`;
 }
 
@@ -953,11 +983,12 @@ function sheet(html){ $("#layer").innerHTML = `<div class="scrim" data-act="scri
 
 let cap = null; // quick capture draft
 function openCapture(areaId){
-  cap = { title: "", area: areaId || "", due: "", files: [], prio: 2 };
+  cap = { title: "", area: areaId || "", due: "", files: [], prio: 2, who: "" };
   drawCapture();
   setTimeout(() => $("#ct") && $("#ct").focus(), 50);
 }
 function drawCapture(){
+  if($("#cpw")) cap.who = $("#cpw").value;
   const areas = S.areas.filter(a => !a.archived);
   const t = today();
   const fri = (() => { let d = t; while(parse(d).getDay() !== 5) d = addDays(d, 1); return d; })();
@@ -975,24 +1006,36 @@ function drawCapture(){
     <div class="field"><span class="lbl">Priorität</span><div class="chips">
       ${[1,2,3].map(p => `<button class="chip" data-act="cpp" data-id="${p}" aria-pressed="${cap.prio === p}">${PRIO[p]}</button>`).join("")}
     </div></div>
+    ${whoField("cpw", cap.who)}
     <div class="field"><span class="lbl">Foto oder PDF</span><div class="row">
       <label class="btn" for="cpf">Foto / Datei wählen</label><input type="file" id="cpf" accept="image/*,application/pdf" multiple hidden>
       <span class="sub">${cap.files.length ? cap.files.length + " ausgewählt" : ""}</span></div></div>
     <div class="row" style="justify-content:flex-end"><button class="btn ghost" data-act="close">Abbrechen</button><button class="btn pri" data-act="capsave">Erfassen</button></div>`);
 }
 function capHint(v){
-  const { high, time, end, rest } = parseQuick(v); const parts = [];
+  const { high, time, end, who, rest } = parseQuick(v); const parts = [];
   if(high && rest) parts.push("Hohe Priorität");
+  if(who && rest) parts.push("Delegiert an " + canonWho(who));
   if(time && rest) parts.push(`Uhrzeit ${time}${end ? "–" + end : ""} Uhr${cap && cap.due && cap.due !== today() ? ", " + fmt(cap.due) : ", heute"}, kommt in den Tagesplan`);
   return parts.length ? "Erkannt: " + parts.join(" · ") + "." : "";
 }
+function whoField(id, val){
+  return `<div class="field"><label for="${id}">Delegiert an</label>
+    <input type="text" id="${id}" list="wholist" value="${esc(val)}" placeholder="Mitarbeiter, z. B. Tobi" autocomplete="off" autocapitalize="words">
+    <datalist id="wholist">${people().map(p => `<option value="${esc(p.name)}">`).join("")}</datalist>
+    <div class="chips" id="${id}-chips" style="margin-top:6px">${whoChipsHtml(id, val)}</div></div>`;
+}
+function whoChipsHtml(id, val){
+  return people().slice(0, 8).map(p => `<button class="chip who" data-act="whopick" data-for="${id}" data-id="${esc(p.name)}" aria-pressed="${(val || "").toLowerCase() === p.name.toLowerCase()}"><span class="av">${esc(initials(p.name))}</span>${esc(p.name)}</button>`).join("");
+}
+function whoChips(id){ const box = document.getElementById(id + "-chips"), inp = document.getElementById(id); if(box && inp) box.innerHTML = whoChipsHtml(id, inp.value); }
 async function saveCapture(){
   const raw = ($("#ct").value || "").trim();
   if(!raw){ $("#ct").focus(); return; }
-  const { high, time, end, rest } = parseQuick(raw);
+  const { high, time, end, who, rest } = parseQuick(raw);
   const title = rest || raw;
   const due = cap.due || (time ? today() : null);
-  const t = { id: uid(), title, area: cap.area || null, due, prio: high ? 1 : (cap.prio || 2), rec: null, note: "", att: [], done: false, created: today() };
+  const t = { id: uid(), title, area: cap.area || null, due, prio: high ? 1 : (cap.prio || 2), who: canonWho(who || cap.who), rec: null, note: "", att: [], done: false, created: today() };
   if(time){ t.plan = due; t.planTime = time; t.planEnd = end || null; t.planOrder = planOf(due).length; }
   const files = cap.files; closeSheet();
   await putTask(t);
@@ -1014,6 +1057,7 @@ function openTask(id){
     <div class="field"><span class="lbl">Priorität</span><div class="chips" id="eprio">
       ${[1,2,3].map(p => `<button class="chip" data-act="ep" data-id="${p}" aria-pressed="${prio(t) === p}">${PRIO[p]}</button>`).join("")}
     </div></div>
+    ${whoField("ew", t.who || "")}
     <div class="field"><label><input type="checkbox" id="er" ${t.rec ? "checked" : ""}> Wiederholen</label>
       <div class="row" id="recrow" ${t.rec ? "" : "hidden"} style="font-size:.9rem">alle
         <input type="number" id="ern" min="1" max="52" value="${r.n || 1}" style="width:64px">
@@ -1053,7 +1097,7 @@ async function saveTaskForm(id, silent){
   const planPart = time ? { plan: due, planTime: time, planEnd: rg.end || null, planOrder: t.plan === due ? (t.planOrder ?? 0) : planOf(due).length }
                  : (t.plan && t.plan === t.due && t.planTime ? { planTime: null } : {});
   const pb = document.querySelector("[data-act=ep][aria-pressed=true]");
-  await putTask({ ...t, title, area: $("#ea").value || null, due, rec, note: $("#en").value, prio: pb ? +pb.dataset.id : prio(t), ...planPart });
+  await putTask({ ...t, title, area: $("#ea").value || null, due, rec, note: $("#en").value, prio: pb ? +pb.dataset.id : prio(t), who: canonWho($("#ew").value), ...planPart });
   if(!silent){ closeSheet(); toast("Gespeichert."); }
 }
 
@@ -1275,7 +1319,7 @@ async function summarize(){
 Fasse die folgenden Meeting-Notizen zusammen und finde alle Aufgaben darin. Schreibe Schweizer Hochdeutsch (ss statt ß), kurz und sachlich.
 Bereiche: ${areaNames.join(", ")}.${main ? ` Hauptbereich dieses Meetings: ${main.name}.` : ""}
 Antworte NUR mit JSON in genau dieser Form:
-{"zusammenfassung":["Punkt", "..."],"aufgaben":[{"titel":"kurze Aufgabe mit Verb","prio":1|2|3 (1=hoch, 2=normal, 3=niedrig),"bereich":"exakter Bereichsname aus der Liste oder leer","faellig":"YYYY-MM-DD oder null","wer":"Name oder leer"}]}
+{"zusammenfassung":["Punkt", "..."],"aufgaben":[{"titel":"kurze Aufgabe mit Verb","prio":1|2|3 (1=hoch, 2=normal, 3=niedrig),"bereich":"exakter Bereichsname aus der Liste oder leer","faellig":"YYYY-MM-DD oder null","wer":"Vorname der Person, die es erledigt, oder leer wenn ich selbst"}]}
 Höchstens 7 Zusammenfassungspunkte. Relative Fristen (z. B. "bis Freitag") in ein Datum umrechnen.
 
 Titel: ${meetDraft.title || "-"}
@@ -1316,7 +1360,7 @@ async function saveMeeting(){
   const created = [];
   for(const t of r.aufgaben){
     if(t._skip || !t.titel) continue;
-    const task = { id: uid(), title: String(t.titel) + (t.wer ? ` (${t.wer})` : ""), prio: [1,2,3].includes(+t.prio) ? +t.prio : 2, area: t._area || null, due: /^\d{4}-\d{2}-\d{2}$/.test(t.faellig || "") ? t.faellig : null, rec: null, note: `Aus Meeting: ${meetDraft.title || fmt(today())}`, att: [], done: false, created: today() };
+    const task = { id: uid(), title: String(t.titel), who: canonWho(t.wer), prio: [1,2,3].includes(+t.prio) ? +t.prio : 2, area: t._area || null, due: /^\d{4}-\d{2}-\d{2}$/.test(t.faellig || "") ? t.faellig : null, rec: null, note: `Aus Meeting: ${meetDraft.title || fmt(today())}`, att: [], done: false, created: today() };
     created.push(task.id); await putTask(task);
   }
   await putMeeting({ id: uid(), title: meetDraft.title || "Meeting", date: today(), created: new Date().toISOString(), area: meetDraft.area || null, notes: meetDraft.notes, summary: r.zusammenfassung, tasks: created });
@@ -1361,6 +1405,8 @@ document.addEventListener("click", async e => {
     case "padd": addPlanEntry(); break;
     case "tplan": { const tid = id; await saveTaskForm(tid, true); await addToPlan(tid, el.dataset.day); closeSheet(); toast(el.dataset.day === today() ? "In den Tagesplan von heute gelegt." : "In den Tagesplan von morgen gelegt."); break; }
     case "ls": S.listSort = id; render(); break;
+    case "lw": S.listWho = id; render(); break;
+    case "whof": S.tab = "liste"; S.listWho = id; S.listArea = "alle"; render(); window.scrollTo(0, 0); break;
     case "addin": openCapture(id); break;
     case "newarea": openAreaEditor(null); break;
     case "starter": { const base = [["Intern", "intern", "#7A55B8"], ["Lehrlinge", "lehrlinge", "#2E8B6A"], ["Sicherheit", "sicherheit", "#C23B55"], ["Elementproduktion", "produktion", "#B5651D"]];
@@ -1371,10 +1417,11 @@ document.addEventListener("click", async e => {
     case "aarch": areaDraft.archived = !areaDraft.archived; el.textContent = areaDraft.archived ? "Wird archiviert" : "Bleibt aktiv"; break;
     case "asave": { const n = $("#an").value.trim(); if(!n){ $("#an").focus(); break; } await putArea({ ...areaDraft, name: n, kind: $("#ak").value }); closeSheet(); if(areaDraft.archived && S.area === areaDraft.id) { S.area = null; render(); } break; }
     case "close": closeSheet(); break;
-    case "cpa": cap.title = $("#ct").value; cap.area = id; drawCapture(); break;
+    case "cpa": cap.who = $("#cpw") ? $("#cpw").value : cap.who; cap.title = $("#ct").value; cap.area = id; drawCapture(); break;
     case "cpp": cap.title = $("#ct").value; cap.prio = +id; drawCapture(); break;
+    case "whopick": { const inp = document.getElementById(el.dataset.for); if(inp){ inp.value = inp.value === id ? "" : id; whoChips(el.dataset.for); if(el.dataset.for === "cpw") cap.who = inp.value; } break; }
     case "showlow": S.showLow = !S.showLow; render(); break;
-    case "cpd": cap.title = $("#ct").value; cap.due = id; drawCapture(); break;
+    case "cpd": cap.who = $("#cpw") ? $("#cpw").value : cap.who; cap.title = $("#ct").value; cap.due = id; drawCapture(); break;
     case "capsave": saveCapture(); break;
     case "tsave": saveTaskForm(id); break;
     case "ep": document.querySelectorAll("[data-act=ep]").forEach(x => x.setAttribute("aria-pressed", x === el)); break;
@@ -1390,7 +1437,7 @@ async function addPlanEntry(){
   inp.value = "";
   const day = S.day || today();
   const lt = parseQuick(txt); const time = lt.time; txt = lt.rest || txt;
-  await putTask({ id: uid(), title: txt, area: null, due: day, prio: lt.high ? 1 : 2, rec: null, note: "", att: [], done: false, created: today(), plan: day, planTime: time, planEnd: lt.end || null, planOrder: planOf(day).length, entry: true });
+  await putTask({ id: uid(), title: txt, area: null, due: day, prio: lt.high ? 1 : 2, rec: null, note: "", att: [], done: false, created: today(), plan: day, planTime: time, planEnd: lt.end || null, who: canonWho(lt.who), planOrder: planOf(day).length, entry: true });
   setTimeout(() => $("#padd") && $("#padd").focus(), 0);
 }
 document.addEventListener("change", e => {
@@ -1410,6 +1457,7 @@ document.addEventListener("change", e => {
 document.addEventListener("input", e => {
   if(e.target.id === "q"){ S.q = e.target.value; render(); }
   else if(e.target.id === "ct"){ const h = $("#cthint"); if(h) h.textContent = capHint(e.target.value); }
+  else if(e.target.id === "cpw" || e.target.id === "ew"){ if(e.target.id === "cpw") cap.who = e.target.value; whoChips(e.target.id); }
   else if(e.target.id === "mn") meetDraft.notes = e.target.value;
   else if(e.target.id === "mt") meetDraft.title = e.target.value;
 });
