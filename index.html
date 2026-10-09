@@ -22,7 +22,7 @@ img{max-width:100%}
 :root{
   --bg:#ECEFEC; --surface:#FFFFFF; --surface2:#F5F7F5; --ink:#17211D; --muted:#5B6862; --line:#D3DBD6;
   --accent:#1D6B57; --accent-ink:#FFFFFF; --accent-soft:#DCEBE5;
-  --late:#B4381F; --late-soft:#F7E1DA; --today:#9A6A00; --today-soft:#F6ECD2;
+  --late:#B4381F; --late-soft:#F7E1DA; --today:#9A6A00; --today-soft:#F6ECD2; --work:#B85C00; --work-soft:#FDEBD5; --work-line:#F2C38E;
   --shadow:0 1px 2px rgba(20,35,30,.08),0 4px 14px rgba(20,35,30,.06);
   --f-display:"Archivo",system-ui,sans-serif;
   --f-body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -32,12 +32,12 @@ img{max-width:100%}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#111715; --surface:#1A2320; --surface2:#151D1A; --ink:#E6ECE9; --muted:#97A59E; --line:#2C3833;
   --accent:#4FB394; --accent-ink:#0D1A15; --accent-soft:#1E3A31;
-  --late:#F08A6E; --late-soft:#3A2019; --today:#E2B44A; --today-soft:#352B12;
+  --late:#F08A6E; --late-soft:#3A2019; --today:#E2B44A; --today-soft:#352B12; --work:#F5A55A; --work-soft:#3A2814; --work-line:#6B4520;
   --shadow:0 1px 2px rgba(0,0,0,.4); color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#111715; --surface:#1A2320; --surface2:#151D1A; --ink:#E6ECE9; --muted:#97A59E; --line:#2C3833;
   --accent:#4FB394; --accent-ink:#0D1A15; --accent-soft:#1E3A31;
-  --late:#F08A6E; --late-soft:#3A2019; --today:#E2B44A; --today-soft:#352B12;
+  --late:#F08A6E; --late-soft:#3A2019; --today:#E2B44A; --today-soft:#352B12; --work:#F5A55A; --work-soft:#3A2814; --work-line:#6B4520;
   --shadow:0 1px 2px rgba(0,0,0,.4); color-scheme:dark}
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -134,6 +134,19 @@ nav.tabs button[aria-current="page"]{color:var(--accent)}
 .chip.who{padding:4px 11px 4px 4px}
 .chip.who[aria-pressed="true"] .av{background:var(--accent-ink);color:var(--accent)}
 .prow{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--line)}
+.task.wip{background:var(--work-soft);box-shadow:0 0 0 1px var(--work-line),var(--shadow)}
+.task.wip .chk{border-color:var(--work);background:var(--surface)}
+.wiptag{font-family:var(--f-display);font-weight:800;font-size:.72rem;letter-spacing:.04em;text-transform:uppercase;border-radius:4px;padding:1px 6px;background:var(--work);color:var(--surface)}
+.compact .task.wip{box-shadow:none}
+.ctx{position:fixed;z-index:90;min-width:220px;max-width:min(320px,calc(100vw - 16px));background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:6px;font-size:.92rem}
+.ctx .ctxh{font-weight:700;padding:6px 10px 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-bottom:1px solid var(--line);margin-bottom:4px}
+.ctx .ctxl{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:6px 10px 2px}
+.ctx button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:none;border:0;border-radius:6px;padding:7px 10px}
+.ctx button:hover,.ctx button:focus-visible{background:var(--surface2);outline:none}
+.ctx .ck{width:14px;color:var(--accent);font-weight:800}
+.ctx .sw-w{width:10px;height:10px;border-radius:3px;background:var(--work-soft);border:1px solid var(--work)}
+.ctx hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+.pill.wip{background:var(--work-soft);color:var(--work);border:0;cursor:pointer}
 .empty{color:var(--muted);background:var(--surface2);border:1px dashed var(--line);border-radius:var(--r);padding:16px;text-align:center}
 .summary{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 0}
 .pill{font-size:.85rem;font-weight:700;border-radius:999px;padding:4px 11px;background:var(--surface);box-shadow:var(--shadow)}
@@ -352,7 +365,7 @@ async function savePeople(list){
 function canonWho(v){ v = cleanWho(v); if(!v) return null; const hit = people().find(p => p.name.toLowerCase() === v.toLowerCase()); return hit ? hit.name : v; }
 const initials = n => n.split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
 let sb = null; // Supabase-Client
-const BUCKET = "anhaenge", COLS = ["areas", "tasks", "meetings"], APP_VERSION = "V4";
+const BUCKET = "anhaenge", COLS = ["areas", "tasks", "meetings"], APP_VERSION = "V5";
 const areaById = id => S.areas.find(a => a.id === id);
 const color = a => a ? a.color : "var(--muted)";
 const openTasks = () => S.tasks.filter(t => !t.done);
@@ -713,14 +726,66 @@ function complete(id){
   if(t.rec && t.due){
     let next = addPeriod(t.due, t.rec.unit, t.rec.n || 1);
     while(daysUntil(next) < 0) next = addPeriod(next, t.rec.unit, t.rec.n || 1);
-    putTask({ ...t, due: next, lastDone: today(), plan: null, planTime: null });
+    putTask({ ...t, due: next, lastDone: today(), plan: null, planTime: null, status: null });
     toast(`Erledigt. Nächstes Mal: ${fmt(next)}`, before);
   } else {
-    putTask({ ...t, done: true, doneAt: today() });
+    putTask({ ...t, done: true, doneAt: today(), status: null });
     toast("Erledigt.", before);
   }
 }
-function reopen(id){ const t = S.tasks.find(x => x.id === id); if(t) putTask({ ...t, done: false, doneAt: null }); }
+function reopen(id){ const t = S.tasks.find(x => x.id === id); if(t) putTask({ ...t, done: false, doneAt: null, status: null }); }
+function setStatus2(id, st){
+  const t = S.tasks.find(x => x.id === id); if(!t) return;
+  if(st === "done"){ if(!t.done) complete(id); return; }
+  const before = JSON.parse(JSON.stringify(t));
+  putTask({ ...t, done: false, doneAt: t.done ? null : t.doneAt || null, status: st === "arbeit" ? "arbeit" : null });
+  toast(st === "arbeit" ? "In Arbeit." : "Wieder offen.", before);
+}
+
+/* ---------- Kontextmenü (Rechtsklick, am Handy langes Drücken) ---------- */
+function closeCtx(){ const m = $("#ctx"); if(m) m.remove(); }
+function openCtx(id, x, y){
+  closeCtx();
+  const t = S.tasks.find(z => z.id === id); if(!t) return;
+  const st = t.done ? "done" : t.status === "arbeit" ? "arbeit" : "offen";
+  const item = (act, val, label, on, extra = "") => `<button role="menuitemradio" aria-checked="${!!on}" data-ctx="${act}" data-v="${val}" ${extra}><span class="ck">${on ? "✓" : ""}</span>${label}</button>`;
+  const m = document.createElement("div"); m.id = "ctx"; m.className = "ctx"; m.setAttribute("role", "menu");
+  m.innerHTML = `<div class="ctxh">${esc(t.title)}</div>
+    <div class="ctxl">Status</div>
+    ${item("st", "offen", "Offen", st === "offen")}
+    ${item("st", "arbeit", `<span class="sw-w"></span>In Arbeit`, st === "arbeit")}
+    ${item("st", "done", "Erledigt", st === "done")}
+    <div class="ctxl">Priorität</div>
+    ${[1, 2, 3].map(p => item("pr", p, PRIO[p], prio(t) === p)).join("")}
+    <hr>
+    ${!t.done ? item("plan", today(), t.plan === today() ? "Aus Tagesplan von heute nehmen" : "In Tagesplan von heute", false) : ""}
+    ${item("open", "", "Öffnen …", false)}`;
+  document.body.appendChild(m);
+  const r = m.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight;
+  m.style.left = Math.max(8, Math.min(x, W - r.width - 8)) + "px";
+  m.style.top = Math.max(8, Math.min(y, H - r.height - 8)) + "px";
+  m.dataset.id = id;
+  const first = m.querySelector('[aria-checked="true"]') || m.querySelector("button"); if(first) first.focus({ preventScroll: true });
+}
+document.addEventListener("contextmenu", e => {
+  const row = e.target.closest(".task[data-tid]");
+  if(!row || e.target.closest("input, textarea")) return;
+  e.preventDefault();
+  openCtx(row.dataset.tid, e.clientX, e.clientY);
+});
+document.addEventListener("pointerdown", e => { if($("#ctx") && !e.target.closest("#ctx")) closeCtx(); }, true);
+window.addEventListener("scroll", closeCtx, { passive: true });
+window.addEventListener("resize", closeCtx);
+document.addEventListener("click", e => {
+  const b = e.target.closest("#ctx [data-ctx]"); if(!b) return;
+  e.stopPropagation();
+  const id = $("#ctx").dataset.id, v = b.dataset.v, t = S.tasks.find(z => z.id === id);
+  closeCtx(); if(!t) return;
+  if(b.dataset.ctx === "st") setStatus2(id, v);
+  else if(b.dataset.ctx === "pr") putTask({ ...t, prio: +v });
+  else if(b.dataset.ctx === "plan"){ if(t.plan === v) putTask({ ...t, plan: null, planTime: null, planEnd: null }); else addToPlan(id, v); }
+  else if(b.dataset.ctx === "open") openTask(id);
+}, true);
 
 /* ---------- rendering ---------- */
 function taskRow(t, opts = {}){
@@ -728,12 +793,14 @@ function taskRow(t, opts = {}){
   const n = t.due ? daysUntil(t.due) : null;
   const cls = n === null ? "" : n < 0 ? "late" : n === 0 ? "today" : "";
   const nAtt = (t.att || []).length;
-  return `<div class="task p${prio(t)} ${t.done ? "isdone" : ""}" style="--ac:${color(a)}">
+  const wip = !t.done && t.status === "arbeit";
+  return `<div class="task p${prio(t)} ${t.done ? "isdone" : ""} ${wip ? "wip" : ""}" data-tid="${t.id}" style="--ac:${color(a)}">
     <button class="chk ${t.done ? "on" : ""}" data-act="${t.done ? "reopen" : "done"}" data-id="${t.id}" aria-label="${t.done ? "Wieder öffnen" : "Erledigt"}: ${esc(t.title)}">${I.check}</button>
     <div class="body" data-act="open" data-id="${t.id}">
       <div class="t">${prio(t) === 1 ? `<span class="prio p1">Hoch</span> ` : ""}${esc(t.title)}</div>
       <div class="meta">
         ${opts.hideArea ? "" : `<span class="area-tag"><span class="dot" style="--ac:${color(a)}"></span>${esc(a ? a.name : "Eingang")}</span>`}
+        ${wip ? `<span class="wiptag">In Arbeit</span>` : ""}
         ${prio(t) === 3 ? `<span class="prio p3">Niedrig</span>` : ""}
         ${!opts.inPlan && t.plan === today() && !t.done ? `<span class="tagp">Tagesplan${t.planTime ? " " + esc(t.planTime) : ""}</span>` : ""}
         ${t.rec ? `<span class="ic">${I.rep}${esc(recLabel(t.rec))}</span>` : ""}
@@ -814,6 +881,7 @@ function viewJetzt(){
       ${tod.length ? `<span class="pill today">${tod.length} heute</span>` : ""}
       <span class="pill">${soon.length} in den nächsten Tagen</span>
       ${nHigh ? `<span class="pill late">${nHigh} hohe Priorität</span>` : ""}
+      ${openTasks().some(t => t.status === "arbeit") ? `<button class="pill wip" data-act="wipl">${openTasks().filter(t => t.status === "arbeit").length} in Arbeit</button>` : ""}
       ${MS.tok && calOfDay(today()).filter(e => !e.allDay && e.end.slice(11, 16) > new Date().toTimeString().slice(0, 5)).length ? `<button class="pill" data-tab="tag">${I.cal.replace("<svg", '<svg width="13" height="13" style="vertical-align:-2px"')} ${calOfDay(today()).filter(e => !e.allDay && e.end.slice(11, 16) > new Date().toTimeString().slice(0, 5)).length} Termine heute</button>` : ""}
     </div>
     ${focus && lowHidden.length ? `<div class="hidden-note"><span>Fokus: ${nHigh} Aufgaben mit hoher Priorität, darum ${lowHidden.length} mit niedriger ausgeblendet.</span><button class="btn ghost" data-act="showlow">Trotzdem anzeigen</button></div>` : ""}
@@ -931,6 +999,7 @@ function viewListe(){
   const W = S.listWho || "alle";
   if(W === "__me") ts = ts.filter(t => !t.who);
   else if(W === "__del") ts = ts.filter(t => t.who);
+  else if(W === "__wip") ts = ts.filter(t => t.status === "arbeit");
   else if(W !== "alle") ts = ts.filter(t => mentions(t, W));
   if(S.q) ts = ts.filter(t => (t.title + " " + (t.note || "") + " " + (t.who || "")).toLowerCase().includes(S.q.toLowerCase()));
   ts.sort(S.listSort === "prio" ? byPrio : byDue);
@@ -948,10 +1017,11 @@ function viewListe(){
       <button class="chip" data-act="lw" data-id="alle" aria-pressed="${W === "alle"}">Alle Personen</button>
       <button class="chip" data-act="lw" data-id="__me" aria-pressed="${W === "__me"}">Selbst erledigen</button>
       <button class="chip" data-act="lw" data-id="__del" aria-pressed="${W === "__del"}">Alle delegierten</button>
+      <button class="chip" data-act="lw" data-id="__wip" aria-pressed="${W === "__wip"}">In Arbeit</button>
       ${ppl.map(p => `<button class="chip who" data-act="lw" data-id="${esc(p.name)}" aria-pressed="${W.toLowerCase() === p.name.toLowerCase()}"><span class="av">${esc(initials(p.name))}</span>${esc(p.name)} <span class="mono">${p.n}</span></button>`).join("")}
       <button class="chip" data-act="ppl" title="Personen hinzufügen oder entfernen">+ Person</button>
     </div>
-    ${W !== "alle" && W !== "__me" && W !== "__del" ? `<p class="sub" style="margin-top:8px">Alle offenen Aufgaben, in denen <b>${esc(W)}</b> vorkommt: delegiert, im Titel oder in der Notiz.</p>` : ""}
+    ${!["alle", "__me", "__del", "__wip"].includes(W) ? `<p class="sub" style="margin-top:8px">Alle offenen Aufgaben, in denen <b>${esc(W)}</b> vorkommt: delegiert, im Titel oder in der Notiz.</p>` : ""}
     <div class="compact" style="margin-top:12px">${ts.length ? `<div class="list">${ts.map(t => taskRow(t)).join("")}</div>` : `<div class="empty">Keine passenden Aufgaben.</div>`}</div>`;
 }
 
@@ -1093,6 +1163,10 @@ function openTask(id){
       <div class="field"><label for="ea">Bereich</label><select id="ea"><option value="">Eingang</option>${areas.map(a => `<option value="${a.id}" ${t.area === a.id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select></div>
       <div class="field"><label for="ed">Fällig</label><div class="row" style="flex-wrap:nowrap"><input type="date" id="ed" value="${esc(t.due || "")}" style="flex:1;min-width:0"><input type="text" id="etime" inputmode="numeric" maxlength="11" placeholder="Zeit" value="${esc(t.plan && t.plan === t.due && t.planTime ? t.planTime + (t.planEnd ? "-" + t.planEnd : "") : "")}" aria-label="Uhrzeit, z. B. 0800 oder 0800-0930" style="width:110px;flex:none" class="mono"></div></div>
     </div>
+    ${!t.done ? `<div class="field"><span class="lbl">Status</span><div class="chips">
+      <button class="chip" data-act="es" data-id="offen" aria-pressed="${t.status !== "arbeit"}">Offen</button>
+      <button class="chip" data-act="es" data-id="arbeit" aria-pressed="${t.status === "arbeit"}">In Arbeit</button>
+    </div></div>` : ""}
     <div class="field"><span class="lbl">Priorität</span><div class="chips" id="eprio">
       ${[1,2,3].map(p => `<button class="chip" data-act="ep" data-id="${p}" aria-pressed="${prio(t) === p}">${PRIO[p]}</button>`).join("")}
     </div></div>
@@ -1136,7 +1210,7 @@ async function saveTaskForm(id, silent){
   const planPart = time ? { plan: due, planTime: time, planEnd: rg.end || null, planOrder: t.plan === due ? (t.planOrder ?? 0) : planOf(due).length }
                  : (t.plan && t.plan === t.due && t.planTime ? { planTime: null } : {});
   const pb = document.querySelector("[data-act=ep][aria-pressed=true]");
-  await putTask({ ...t, title, area: $("#ea").value || null, due, rec, note: $("#en").value, prio: pb ? +pb.dataset.id : prio(t), who: canonWho($("#ew").value), ...planPart });
+  await putTask({ ...t, title, area: $("#ea").value || null, due, rec, note: $("#en").value, prio: pb ? +pb.dataset.id : prio(t), who: canonWho($("#ew").value), status: t.done ? t.status || null : (document.querySelector("[data-act=es][aria-pressed=true]")?.dataset.id === "arbeit" ? "arbeit" : null), ...planPart });
   if(!silent){ closeSheet(); toast("Gespeichert."); }
 }
 
@@ -1445,6 +1519,7 @@ document.addEventListener("click", async e => {
     case "tplan": { const tid = id; await saveTaskForm(tid, true); await addToPlan(tid, el.dataset.day); closeSheet(); toast(el.dataset.day === today() ? "In den Tagesplan von heute gelegt." : "In den Tagesplan von morgen gelegt."); break; }
     case "ls": S.listSort = id; render(); break;
     case "lw": S.listWho = id; render(); break;
+    case "wipl": S.tab = "liste"; S.listWho = "__wip"; S.listArea = "alle"; render(); window.scrollTo(0, 0); break;
     case "ppl": openPeople(); break;
     case "padd2": addPerson(); break;
     case "pdel": await savePeople((S.peopleList || []).filter(n => n.toLowerCase() !== id.toLowerCase())); if(S.listWho === id) S.listWho = "alle"; openPeople(); break;
@@ -1467,6 +1542,7 @@ document.addEventListener("click", async e => {
     case "capsave": saveCapture(); break;
     case "tsave": saveTaskForm(id); break;
     case "ep": document.querySelectorAll("[data-act=ep]").forEach(x => x.setAttribute("aria-pressed", x === el)); break;
+    case "es": document.querySelectorAll("[data-act=es]").forEach(x => x.setAttribute("aria-pressed", x === el)); break;
     case "del": if(el.dataset.sure){ closeSheet(); const t = S.tasks.find(x => x.id === id); await dropTask(id); toast("Gelöscht.", t); } else { el.dataset.sure = "1"; el.textContent = "Wirklich löschen?"; } break;
     case "anno": { const tid = $("[data-act=tsave]").dataset.id; await saveTaskForm(tid, true); closeSheet(); openAnno(tid, +el.dataset.i); break; }
     case "summarize": summarize(); break;
@@ -1504,6 +1580,10 @@ document.addEventListener("input", e => {
   else if(e.target.id === "mt") meetDraft.title = e.target.value;
 });
 document.addEventListener("keydown", e => {
+  if($("#ctx")){
+    if(e.key === "Escape"){ closeCtx(); e.preventDefault(); return; }
+    if(e.key === "ArrowDown" || e.key === "ArrowUp"){ const bs = [...document.querySelectorAll("#ctx button")]; const i = bs.indexOf(document.activeElement); const n = bs[(i + (e.key === "ArrowDown" ? 1 : -1) + bs.length) % bs.length]; if(n) n.focus(); e.preventDefault(); return; }
+  }
   if(e.key === "Enter" && e.target.id === "ct"){ e.preventDefault(); saveCapture(); }
   if(e.key === "Enter" && e.target.id === "padd"){ e.preventDefault(); addPlanEntry(); }
   if(e.key === "Enter" && e.target.id === "pnew"){ e.preventDefault(); addPerson(); }
