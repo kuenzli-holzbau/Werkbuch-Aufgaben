@@ -147,6 +147,15 @@ nav.tabs button[aria-current="page"]{color:var(--accent)}
 .ctx .sw-w{width:10px;height:10px;border-radius:3px;background:var(--work-soft);border:1px solid var(--work)}
 .ctx hr{border:0;border-top:1px solid var(--line);margin:4px 0}
 .pill.wip{background:var(--work-soft);color:var(--work);border:0;cursor:pointer}
+.mnotes{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:8px;color:var(--ink);line-height:1.5}
+.mnotes a{color:var(--accent);font-weight:700}
+.meet summary{padding:2px 0}
+.exlist{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.exrow{display:flex;gap:10px;align-items:flex-start;padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--surface2);opacity:.75}
+.exrow.on{background:var(--surface);opacity:1;border-color:var(--accent)}
+.exrow.done{align-items:center;opacity:.6}
+.exrow.done .ck{color:var(--accent);font-weight:800}
+.exrow input[type=text]{padding:8px 10px}
 .empty{color:var(--muted);background:var(--surface2);border:1px dashed var(--line);border-radius:var(--r);padding:16px;text-align:center}
 .summary{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 0}
 .pill{font-size:.85rem;font-weight:700;border-radius:999px;padding:4px 11px;background:var(--surface);box-shadow:var(--shadow)}
@@ -357,15 +366,15 @@ const personTasks = name => openTasks().filter(t => !isHiddenRec(t) && mentions(
 async function savePeople(list){
   S.peopleList = [...new Set(list.map(cleanWho).filter(Boolean))];
   try {
-    await idbPut("docs", "areas/__people", { col: "areas", id: "__people", data: { names: S.peopleList }, deleted: false });
-    await idbPut("outbox", "areas/__people", Date.now() + Math.random());
+    dirty.add("areas/__people");
+    await idbLocalWrite("areas/__people", { col: "areas", id: "__people", data: { names: S.peopleList }, deleted: false });
   } catch(e){}
   kick(); render();
 }
 function canonWho(v){ v = cleanWho(v); if(!v) return null; const hit = people().find(p => p.name.toLowerCase() === v.toLowerCase()); return hit ? hit.name : v; }
 const initials = n => n.split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
 let sb = null; // Supabase-Client
-const BUCKET = "anhaenge", COLS = ["areas", "tasks", "meetings"], APP_VERSION = "V5";
+const BUCKET = "anhaenge", COLS = ["areas", "tasks", "meetings"], APP_VERSION = "V6";
 const areaById = id => S.areas.find(a => a.id === id);
 const color = a => a ? a.color : "var(--muted)";
 const openTasks = () => S.tasks.filter(t => !t.done);
@@ -402,6 +411,29 @@ const idbDel = (st, k) => idb(st, "readwrite", s => s.delete(k));
 const idbKeys = st => idb(st, "readonly", s => s.getAllKeys());
 const idbVals = st => idb(st, "readonly", s => s.getAll());
 const idbClear = st => idb(st, "readwrite", s => s.clear());
+// Lokale Änderung: Dokument und Warteschlange in EINER Transaktion schreiben
+async function idbLocalWrite(key, rec){
+  const d = await idbOpen();
+  return new Promise((res, rej) => { const t = d.transaction(["docs", "outbox"], "readwrite");
+    t.objectStore("docs").put(rec, key); t.objectStore("outbox").put(Date.now() + Math.random(), key);
+    t.oncomplete = () => res(); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error); });
+}
+// Änderung vom Server: nur übernehmen, wenn keine eigene Änderung auf das Hochladen wartet (atomar geprüft)
+async function idbRemoteWrite(key, rec){
+  const d = await idbOpen();
+  return new Promise((res, rej) => { const t = d.transaction(["docs", "outbox"], "readwrite"); let ok = false;
+    const q = t.objectStore("outbox").get(key);
+    q.onsuccess = () => { if(q.result === undefined){ ok = true; t.objectStore("docs").put(rec, key); } };
+    t.oncomplete = () => res(ok); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error); });
+}
+// Nach dem Hochladen: Warteschlangen-Eintrag nur entfernen, wenn er sich inzwischen nicht geändert hat (atomar)
+async function idbOutboxClear(key, stamp){
+  const d = await idbOpen();
+  return new Promise((res, rej) => { const t = d.transaction("outbox", "readwrite"); let ok = false; const st = t.objectStore("outbox");
+    const q = st.get(key); q.onsuccess = () => { if(q.result === stamp){ st.delete(key); ok = true; } };
+    t.oncomplete = () => res(ok); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error); });
+}
+const dirty = new Set(); // lokal geändert, noch nicht hochgeladen
 
 let renderT = null;
 function scheduleRender(){ clearTimeout(renderT); renderT = setTimeout(render, 30); }
@@ -416,22 +448,22 @@ async function loadLocal(){
 }
 async function saveDoc(col, obj){
   const { id, ...data } = obj;
+  dirty.add(col + "/" + id);
   const i = S[col].findIndex(x => x.id === id);
   if(i >= 0) S[col][i] = obj; else S[col].push(obj);
   if(col === "meetings") sortMeetings();
   render();
   try {
-    await idbPut("docs", col + "/" + id, { col, id, data: JSON.parse(JSON.stringify(data)), deleted: false });
-    await idbPut("outbox", col + "/" + id, Date.now() + Math.random());
+    await idbLocalWrite(col + "/" + id, { col, id, data: JSON.parse(JSON.stringify(data)), deleted: false });
   } catch(e){ toast("Lokales Speichern fehlgeschlagen. Ist der Speicher des Geräts voll?"); return false; }
   kick(); if(col === "tasks") msKick();
   return true;
 }
 async function deleteDoc(col, id){
+  dirty.add(col + "/" + id);
   S[col] = S[col].filter(x => x.id !== id); render();
   const old = await idbGet("docs", col + "/" + id);
-  await idbPut("docs", col + "/" + id, { col, id, data: old ? old.data : {}, deleted: true });
-  await idbPut("outbox", col + "/" + id, Date.now() + Math.random());
+  await idbLocalWrite(col + "/" + id, { col, id, data: old ? old.data : {}, deleted: true });
   kick();
 }
 const putTask = t => saveDoc("tasks", t);
@@ -676,7 +708,7 @@ async function sync(){
       if(!doc){ await idbDel("outbox", k); continue; }
       const { error } = await sb.from(doc.col).upsert({ id: doc.id, data: doc.data, deleted: !!doc.deleted });
       if(error) throw error;
-      if((await idbGet("outbox", k)) === stamp) await idbDel("outbox", k); // nur wenn inzwischen nicht erneut geändert
+      if(await idbOutboxClear(k, stamp)) dirty.delete(k); // nur wenn inzwischen nicht erneut geändert
     }
     // 3. Änderungen anderer Geräte holen
     for(const col of COLS){
@@ -703,8 +735,9 @@ async function sync(){
 }
 async function applyRemote(col, r){
   const key = col + "/" + r.id;
-  if(await idbGet("outbox", key)) return; // eigene, noch nicht hochgeladene Änderung hat Vorrang
-  await idbPut("docs", key, { col, id: r.id, data: r.data, deleted: !!r.deleted, updated_at: r.updated_at });
+  if(dirty.has(key)) return; // eigene, noch nicht hochgeladene Änderung hat Vorrang
+  const ok = await idbRemoteWrite(key, { col, id: r.id, data: r.data, deleted: !!r.deleted, updated_at: r.updated_at });
+  if(!ok || dirty.has(key)) return;
   if(col === "areas" && r.id === "__people"){ S.peopleList = !r.deleted && Array.isArray(r.data.names) ? r.data.names : []; if(!document.querySelector(".sheet, #anno, #viewer")) scheduleRender(); return; }
   const i = S[col].findIndex(x => x.id === r.id);
   if(r.deleted){ if(i >= 0) S[col].splice(i, 1); }
@@ -1029,15 +1062,16 @@ let meetDraft = { title: "", area: "", notes: "", result: null, busy: false, err
 function viewMeeting(){
   const areas = S.areas.filter(a => !a.archived);
   const r = meetDraft.result;
-  return `<h1>Meeting</h1><p class="sub">Notizen eintippen oder einfügen. Claude fasst zusammen und schlägt Aufgaben vor, die du nur noch bestätigst.</p>
+  const ai = !!(window.WERKBUCH_CONFIG || {}).ai;
+  return `<h1>Meeting</h1><p class="sub">Notizen eintippen oder einfügen, eine Zeile pro Punkt. Danach wählst du aus, welche Zeilen Aufgaben werden. „@Name“ delegiert, „!“ heisst hohe Priorität, „heute“, „morgen“, „bis Freitag“ oder „15.10.“ wird zum Datum.</p>
     <div class="grid2" style="margin-top:12px">
       <div class="field"><label for="mt">Titel</label><input type="text" id="mt" placeholder="z. B. Bausitzung Pagrüegerweg" value="${esc(meetDraft.title)}"></div>
       <div class="field"><label for="ma">Hauptbereich</label><select id="ma"><option value="">Gemischt</option>${areas.map(a => `<option value="${a.id}" ${meetDraft.area === a.id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select></div>
     </div>
-    <div class="field"><label for="mn">Notizen</label><textarea id="mn" style="min-height:170px" placeholder="Stichworte reichen: Wer macht was bis wann, Entscheide, offene Punkte …">${esc(meetDraft.notes)}</textarea></div>
-    <div class="row"><button class="btn pri" data-act="summarize" ${meetDraft.busy || S.aiMissing ? "disabled" : ""}>${meetDraft.busy ? "Claude denkt nach …" : "Zusammenfassen und Aufgaben finden"}</button>
-      ${meetDraft.busy ? `<button class="btn" data-act="stopsum">Stopp</button>` : ""}
-      ${!meetDraft.result && !meetDraft.busy ? `<button class="btn" data-act="savemeet">Nur Notizen speichern</button>` : ""}</div>
+    <div class="field"><label for="mn">Notizen</label><textarea id="mn" style="min-height:170px" placeholder="z. B.&#10;Service Hebebühne steht an&#10;Rückmeldung heute geben&#10;@Bruno Offerte Hofmann und Rüesch einholen bis Freitag">${esc(meetDraft.notes)}</textarea></div>
+    <div class="row"><button class="btn pri" data-act="meetsave" data-id="tasks">Speichern und Aufgaben erstellen</button>
+      <button class="btn" data-act="meetsave" data-id="">Nur speichern</button>
+      ${ai ? `<button class="btn ghost" data-act="summarize" ${meetDraft.busy ? "disabled" : ""}>${meetDraft.busy ? "Claude denkt nach …" : "Mit Claude zusammenfassen"}</button>${meetDraft.busy ? `<button class="btn" data-act="stopsum">Stopp</button>` : ""}` : ""}</div>
     ${meetDraft.err ? `<p style="color:var(--late);margin-top:8px">${esc(meetDraft.err)}</p>` : ""}
     ${r ? `<div class="out"><div class="lbl">Zusammenfassung</div><ul>${(r.zusammenfassung || []).map(s => `<li>${esc(s)}</li>`).join("")}</ul>
       <div class="lbl" style="margin-top:14px">Vorgeschlagene Aufgaben</div>
@@ -1046,7 +1080,148 @@ function viewMeeting(){
         <div class="row" style="margin-top:6px"><select data-act="sga" data-i="${i}" aria-label="Bereich"><option value="">Eingang</option>${areas.map(a => `<option value="${a.id}" ${t._area === a.id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select>
         <input type="date" data-act="sgd" data-i="${i}" value="${esc(t.faellig || "")}" aria-label="Fällig"></div></div></div>`).join("") || `<p class="sub">Keine Aufgaben erkannt.</p>`}
       <div class="row" style="margin-top:12px"><button class="btn pri" data-act="savemeet">Meeting speichern und Aufgaben übernehmen</button></div></div>` : ""}
-    ${S.meetings.length ? `<h2>Frühere Meetings <span class="n">${S.meetings.length}</span></h2><div class="list">${S.meetings.slice(0, 20).map(m => `<details class="meet"><summary>${esc(m.title || "Meeting")} <span class="sub mono">${fmt(m.date)}</span></summary>${(m.summary || []).length ? `<ul>${m.summary.map(s => `<li>${esc(s)}</li>`).join("")}</ul>` : ""}${m.notes ? `<div class="sub" style="white-space:pre-wrap;margin-top:6px">${esc(m.notes)}</div>` : ""}</details>`).join("")}</div>` : ""}`;
+    ${S.meetings.length ? `<h2>Frühere Meetings <span class="n">${S.meetings.length}</span></h2><div class="list">${S.meetings.slice(0, 40).map(meetCard).join("")}</div>` : ""}`;
+}
+function linkify(txt){
+  return esc(txt).replace(/(\+?\d[\d \/.-]{7,}\d)/g, m => `<a href="tel:${m.replace(/[^\d+]/g, "")}">${m}</a>`);
+}
+function meetCard(m){
+  const linked = (m.tasks || []).map(id => S.tasks.find(t => t.id === id)).filter(Boolean);
+  const open = S.openMeet === m.id;
+  return `<details class="meet" id="meet-${m.id}" ${open ? "open" : ""}><summary>${esc(m.title || "Meeting")} <span class="sub mono">${fmt(m.date)}</span>${linked.length ? ` <span class="sub">· ${linked.filter(t => !t.done).length} offene Aufgaben</span>` : ""}</summary>
+    ${(m.summary || []).length ? `<ul>${m.summary.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+    ${m.notes ? `<div class="mnotes">${linkify(m.notes)}</div>` : ""}
+    ${linked.length ? `<div class="lbl" style="margin-top:10px">Aufgaben aus diesem Meeting</div><div class="list" style="margin-top:6px">${linked.map(t => taskRow(t)).join("")}</div>` : ""}
+    <div class="row" style="margin-top:10px">
+      <button class="btn pri" data-act="mextract" data-id="${m.id}">Aufgaben erstellen</button>
+      <button class="btn" data-act="medit" data-id="${m.id}">Nachtrag / bearbeiten</button>
+    </div></details>`;
+}
+
+/* ---------- Aufgaben aus Meeting-Notizen (ohne KI) ---------- */
+const WDN = ["sonntag", "montag", "dienstag", "mittwoch", "donnerstag", "freitag", "samstag"];
+function nextWeekday(wd){ let d = addDays(today(), 1); while(parse(d).getDay() !== wd) d = addDays(d, 1); return d; }
+function dueFromText(line){
+  const l = line.toLowerCase();
+  let m = l.match(/(?:^|[^\d])(\d{1,2})\.(\d{1,2})\.(\d{2,4})?/);
+  if(m){
+    const now = new Date(); let y = m[3] ? +m[3] : now.getFullYear(); if(y < 100) y += 2000;
+    const d = new Date(y, +m[2] - 1, +m[1]);
+    if(d.getMonth() === +m[2] - 1){ let s = iso(d); if(!m[3] && s < today()) { d.setFullYear(y + 1); s = iso(d); } return s; }
+  }
+  if(/\bübermorgen\b/.test(l)) return addDays(today(), 2);
+  if(/\bheute\b/.test(l)) return today();
+  if(/\bmorgen\b/.test(l)) return addDays(today(), 1);
+  if(/\b(nächste|kommende)\s+woche\b/.test(l)) return nextWeekday(1);
+  if(/\bende\s+(der\s+)?woche\b/.test(l)){ const d = today(); return parse(d).getDay() === 5 ? d : nextWeekday(5); }
+  m = l.match(/\b(montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\b/);
+  if(m) return nextWeekday(WDN.indexOf(m[1]));
+  return null;
+}
+const VERB_RE = /\b(machen|schauen|anschauen|geben|bestellen|klären|abklären|planen|prüfen|kontrollieren|senden|schicken|anrufen|melden|organisieren|erstellen|offerieren|einholen|besprechen|nachfragen|liefern|montieren|reparieren|vorbereiten|informieren|zuschneiden|rüsten|abholen|bringen|fertigstellen|erledigen|termin|rückmeldung|todo)\b/i;
+const lineKey = s => s.toLowerCase().replace(/\s+/g, " ").trim();
+function extractCandidates(m){
+  const used = m.lines || {};
+  const out = [];
+  for(const raw of String(m.notes || "").split(/\r?\n/)){
+    let line = raw.trim();
+    if(!line || line.length < 4) continue;
+    if(/^—\s*Nachtrag/i.test(line)) continue;
+    if(/^[\d\s+()\/.-]{6,}$/.test(line)) continue; // nur Telefonnummer
+    const key = lineKey(line);
+    let text = line.replace(/^([-*•–>·]|\d+[.)])\s*/, "").replace(/^(todo|to do|aufgabe)\s*:\s*/i, "");
+    let high = false; if(/^!+/.test(text)){ high = true; text = text.replace(/^!+\s*/, ""); }
+    let who = null; // "@Name" am Anfang wird entfernt, mitten im Satz bleibt der Name stehen
+    text = text.replace(/(^|\s)@([\p{L}][\p{L}\p{N}_.-]*)\s*/u, (all, sp, n, off) => { who = n.replace(/_/g, " "); return off === 0 && sp === "" ? "" : sp + who + " "; });
+    const due = dueFromText(text);
+    const bullet = /^([-*•–>·]|\d+[.)]|todo|!)/i.test(line);
+    const looks = bullet || !!who || !!due || high || VERB_RE.test(text) || /\b\p{L}{3,}en$/u.test(text.replace(/[.!?]+$/, ""));
+    text = text.replace(/\s+/g, " ").trim(); text = text.charAt(0).toUpperCase() + text.slice(1);
+    out.push({ key, title: text.slice(0, 160), who: who ? canonWho(who) : "", due: due || "", high, pick: looks && !used[key], done: !!used[key], area: m.area || "" });
+  }
+  return out;
+}
+let EX = null; // offene Auswahl
+function openExtract(mid){
+  const m = S.meetings.find(x => x.id === mid); if(!m) return;
+  EX = { mid, rows: extractCandidates(m) };
+  drawExtract();
+}
+function drawExtract(){
+  const m = S.meetings.find(x => x.id === EX.mid); if(!m){ closeSheet(); return; }
+  const areas = S.areas.filter(a => !a.archived);
+  const n = EX.rows.filter(r => r.pick && !r.done && r.title.trim()).length;
+  sheet(`<div class="grip"></div><h3>Aufgaben aus „${esc(m.title || "Meeting")}“</h3>
+    <p class="sub">Haken setzen bei allem, was eine Aufgabe werden soll. Titel, Person, Datum und Bereich kannst du direkt anpassen.</p>
+    <div class="exlist">${EX.rows.map((r, i) => r.done ? `<div class="exrow done"><span class="ck">✓</span><span>${esc(r.title)}</span><span class="sub">bereits erstellt</span></div>` : `<div class="exrow ${r.pick ? "on" : ""}">
+      <input type="checkbox" data-ex="pick" data-i="${i}" ${r.pick ? "checked" : ""} aria-label="Als Aufgabe übernehmen" style="width:20px;height:20px;margin-top:10px">
+      <div style="min-width:0;flex:1">
+        <input type="text" data-ex="title" data-i="${i}" value="${esc(r.title)}" aria-label="Titel">
+        <div class="row" style="margin-top:6px">
+          <input type="text" data-ex="who" data-i="${i}" value="${esc(r.who)}" list="wholist" placeholder="Delegiert an" style="width:150px;flex:1 1 120px" aria-label="Delegiert an">
+          <input type="date" data-ex="due" data-i="${i}" value="${esc(r.due)}" style="width:auto;flex:0 1 160px" aria-label="Fällig">
+          <select data-ex="area" data-i="${i}" style="width:auto;flex:1 1 140px" aria-label="Bereich"><option value="">Eingang</option>${areas.map(a => `<option value="${a.id}" ${r.area === a.id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select>
+          <button class="chip" data-ex="high" data-i="${i}" aria-pressed="${r.high}" title="Hohe Priorität">! Hoch</button>
+        </div></div></div>`).join("") || `<div class="empty">In den Notizen stehen keine Zeilen. Füge über „Nachtrag / bearbeiten“ Text hinzu oder erfasse unten eine Aufgabe.</div>`}</div>
+    <datalist id="wholist">${people().map(p => `<option value="${esc(p.name)}">`).join("")}</datalist>
+    <button class="btn ghost" data-act="exadd" style="margin-top:8px">+ Weitere Aufgabe</button>
+    <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn ghost" data-act="close">Abbrechen</button><button class="btn pri" data-act="exsave" ${n ? "" : "disabled"}>${n} ${n === 1 ? "Aufgabe" : "Aufgaben"} erstellen</button></div>`);
+}
+function exSync(){ // Eingaben in EX übernehmen
+  document.querySelectorAll("[data-ex]").forEach(el => {
+    const r = EX.rows[+el.dataset.i]; if(!r) return;
+    const k = el.dataset.ex;
+    if(k === "pick") r.pick = el.checked; else if(k === "title") r.title = el.value; else if(k === "who") r.who = el.value; else if(k === "due") r.due = el.value; else if(k === "area") r.area = el.value;
+  });
+}
+async function exSave(){
+  exSync();
+  const m = S.meetings.find(x => x.id === EX.mid); if(!m) return;
+  const lines = { ...(m.lines || {}) }, ids = [...(m.tasks || [])];
+  let n = 0;
+  for(const r of EX.rows){
+    if(r.done || !r.pick || !r.title.trim()) continue;
+    const t = { id: uid(), title: r.title.trim(), area: r.area || null, due: r.due || null, prio: r.high ? 1 : 2, who: canonWho(r.who), rec: null,
+      note: `Aus Meeting „${m.title || "Meeting"}“ vom ${fmt(m.date)}`, att: [], done: false, created: today(), meeting: m.id };
+    await putTask(t); ids.push(t.id); if(r.key) lines[r.key] = t.id; n++;
+  }
+  await putMeeting({ ...m, tasks: ids, lines });
+  EX = null; closeSheet(); S.openMeet = m.id; render();
+  toast(`${n} ${n === 1 ? "Aufgabe" : "Aufgaben"} erstellt.`);
+}
+function openMeetEdit(mid){
+  const m = S.meetings.find(x => x.id === mid); if(!m) return;
+  const areas = S.areas.filter(a => !a.archived || a.id === m.area);
+  sheet(`<div class="grip"></div><h3>Meeting bearbeiten</h3>
+    <div class="grid2">
+      <div class="field"><label for="me-t">Titel</label><input type="text" id="me-t" value="${esc(m.title || "")}"></div>
+      <div class="field"><label for="me-a">Hauptbereich</label><select id="me-a"><option value="">Gemischt</option>${areas.map(a => `<option value="${a.id}" ${m.area === a.id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select></div>
+    </div>
+    <div class="field"><label for="me-x">Nachtrag</label><textarea id="me-x" placeholder="Was ist neu? Wird mit Datum und Uhrzeit unten angehängt."></textarea></div>
+    <details class="fold"><summary>Bisherige Notizen ändern</summary><textarea id="me-n" style="min-height:160px;margin-top:6px">${esc(m.notes || "")}</textarea></details>
+    <div class="row" style="justify-content:space-between;margin-top:12px">
+      <button class="btn danger" data-act="mdel" data-id="${m.id}">Löschen</button>
+      <div class="row"><button class="btn ghost" data-act="close">Abbrechen</button><button class="btn" data-act="mesave" data-id="${m.id}">Speichern</button><button class="btn pri" data-act="mesave" data-id="${m.id}" data-x="tasks">Speichern und Aufgaben erstellen</button></div>
+    </div>`);
+  setTimeout(() => $("#me-x") && $("#me-x").focus(), 60);
+}
+async function saveMeetEdit(mid, thenTasks){
+  const m = S.meetings.find(x => x.id === mid); if(!m) return;
+  let notes = $("#me-n").value;
+  const add = $("#me-x").value.trim();
+  if(add){ const d = new Date(); notes = (notes.trim() ? notes.trim() + "\n\n" : "") + `— Nachtrag ${fmt(today())} ${pad(d.getHours())}:${pad(d.getMinutes())} —\n` + add; }
+  await putMeeting({ ...m, title: $("#me-t").value.trim() || m.title, area: $("#me-a").value || null, notes });
+  closeSheet(); S.openMeet = mid; render();
+  if(thenTasks) openExtract(mid); else toast(add ? "Nachtrag gespeichert." : "Gespeichert.");
+}
+async function saveNewMeeting(thenTasks){
+  meetDraft.title = $("#mt").value; meetDraft.area = $("#ma").value; meetDraft.notes = $("#mn").value;
+  if(!meetDraft.notes.trim() && !meetDraft.title.trim()){ $("#mn").focus(); return; }
+  const m = { id: uid(), title: meetDraft.title.trim() || "Meeting", date: today(), created: new Date().toISOString(), area: meetDraft.area || null, notes: meetDraft.notes, summary: [], tasks: [], lines: {} };
+  await putMeeting(m);
+  meetDraft = { title: "", area: "", notes: "", result: null, busy: false, err: "" };
+  S.openMeet = m.id; render();
+  if(thenTasks) openExtract(m.id); else toast("Meeting gespeichert.");
 }
 
 function render(){
@@ -1185,6 +1360,7 @@ function openTask(id){
       <p class="sub" style="font-size:.85rem">Tippe auf ein Bild, um mit Stift zu zeichnen oder Pins zu setzen.</p>
     </div>
     ${!t.done ? `<div class="row" style="margin-bottom:10px"><span class="lbl">Tagesplan</span>${t.plan ? `<span class="tagp">geplant ${t.plan === today() ? "heute" : fmt(t.plan)}</span>` : ""}<button class="chip" data-act="tplan" data-id="${t.id}" data-day="${today()}">Heute</button><button class="chip" data-act="tplan" data-id="${t.id}" data-day="${addDays(today(), 1)}">Morgen</button></div>` : ""}
+    ${t.meeting && S.meetings.some(m => m.id === t.meeting) ? `<p><button class="btn ghost" data-act="openmeet" data-id="${t.meeting}" style="padding-left:0">Zum Meeting „${esc(S.meetings.find(m => m.id === t.meeting).title)}“ ›</button></p>` : ""}
     ${MS.tok && t.ol && t.ol.id && wantsEvent(t) ? `<p class="sub">${I.cal.replace("<svg", '<svg width="14" height="14" style="vertical-align:-2px"')} Steht im Outlook-Kalender. Änderungen werden automatisch übernommen.</p>` : MS.tok && wantsEvent(t) ? `<p class="sub">Wird in den Outlook-Kalender eingetragen.</p>` : MS.tok && t.due && !t.planTime ? `<p class="sub">Mit einer Uhrzeit kommt die Aufgabe automatisch in deinen Outlook-Kalender.</p>` : ""}
     ${outlook && !MS.tok ? `<p><a href="${outlook}" target="_blank" rel="noopener">In Outlook-Kalender eintragen ↗</a></p>` : ""}
     <div class="row" style="justify-content:space-between;margin-top:8px">
@@ -1548,6 +1724,14 @@ document.addEventListener("click", async e => {
     case "summarize": summarize(); break;
     case "stopsum": sumCtl?.abort(); break;
     case "savemeet": saveMeeting(); break;
+    case "meetsave": saveNewMeeting(id === "tasks"); break;
+    case "mextract": e.preventDefault(); openExtract(id); break;
+    case "medit": e.preventDefault(); openMeetEdit(id); break;
+    case "mesave": saveMeetEdit(id, el.dataset.x === "tasks"); break;
+    case "mdel": if(el.dataset.sure){ const m = S.meetings.find(x => x.id === id); closeSheet(); await deleteDoc("meetings", id); toast("Meeting gelöscht. Die Aufgaben daraus bleiben.", null); } else { el.dataset.sure = "1"; el.textContent = "Wirklich löschen?"; } break;
+    case "exadd": exSync(); EX.rows.push({ key: "", title: "", who: "", due: "", high: false, pick: true, done: false, area: (S.meetings.find(x => x.id === EX.mid) || {}).area || "" }); drawExtract(); { const ins = document.querySelectorAll('[data-ex="title"]'); ins[ins.length - 1]?.focus(); } break;
+    case "exsave": exSave(); break;
+    case "openmeet": closeSheet(); S.tab = "meeting"; S.openMeet = id; render(); setTimeout(() => { const d = document.getElementById("meet-" + id); if(d) d.scrollIntoView({ block: "start" }); }, 50); break;
   }
 });
 async function addPlanEntry(){
@@ -1558,8 +1742,17 @@ async function addPlanEntry(){
   await putTask({ id: uid(), title: txt, area: null, due: day, prio: lt.high ? 1 : 2, rec: null, note: "", att: [], done: false, created: today(), plan: day, planTime: time, planEnd: lt.end || null, who: canonWho(lt.who), planOrder: planOf(day).length, entry: true });
   setTimeout(() => $("#padd") && $("#padd").focus(), 0);
 }
+document.addEventListener("toggle", e => {
+  const d = e.target; if(!d.matches || !d.matches("details.meet")) return;
+  const id = d.id.slice(5); if(d.open) S.openMeet = id; else if(S.openMeet === id) S.openMeet = null;
+}, true);
+document.addEventListener("click", e => {
+  const b = e.target.closest('[data-ex="high"]'); if(!b || !EX) return;
+  const r = EX.rows[+b.dataset.i]; r.high = !r.high; b.setAttribute("aria-pressed", r.high);
+});
 document.addEventListener("change", e => {
   const el = e.target;
+  if(el.dataset.ex && EX){ exSync(); if(el.dataset.ex === "pick"){ const n = EX.rows.filter(r => r.pick && !r.done && r.title.trim()).length; el.closest(".exrow").classList.toggle("on", el.checked); const b = $("[data-act=exsave]"); if(b){ b.disabled = !n; b.textContent = `${n} ${n === 1 ? "Aufgabe" : "Aufgaben"} erstellen`; } } return; }
   if(el.dataset.act === "ptime"){ const t = S.tasks.find(x => x.id === el.dataset.id); if(!t) return;
     const v = el.value.trim(); let r = { time: null, end: null };
     if(v){ r = parseRange(v); if(!r){ el.value = t.planTime || ""; toast("Uhrzeit bitte als 0800, 1430 oder 0800-0930 eingeben."); return; } }
