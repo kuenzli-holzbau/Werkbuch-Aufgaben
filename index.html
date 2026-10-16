@@ -138,7 +138,7 @@ nav.tabs button[aria-current="page"]{color:var(--accent)}
 .task.wip .chk{border-color:var(--work);background:var(--surface)}
 .wiptag{font-family:var(--f-display);font-weight:800;font-size:.72rem;letter-spacing:.04em;text-transform:uppercase;border-radius:4px;padding:1px 6px;background:var(--work);color:var(--surface)}
 .compact .task.wip{box-shadow:none}
-.ctx{position:fixed;z-index:90;min-width:220px;max-width:min(320px,calc(100vw - 16px));background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:6px;font-size:.92rem}
+.ctx{position:fixed;z-index:90;max-height:calc(100vh - 16px);overflow:auto;min-width:220px;max-width:min(320px,calc(100vw - 16px));background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:6px;font-size:.92rem}
 .ctx .ctxh{font-weight:700;padding:6px 10px 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-bottom:1px solid var(--line);margin-bottom:4px}
 .ctx .ctxl{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:6px 10px 2px}
 .ctx button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:none;border:0;border-radius:6px;padding:7px 10px}
@@ -156,6 +156,24 @@ nav.tabs button[aria-current="page"]{color:var(--accent)}
 .exrow.done{align-items:center;opacity:.6}
 .exrow.done .ck{color:var(--accent);font-weight:800}
 .exrow input[type=text]{padding:8px 10px}
+body.wide .wrap{max-width:1500px}
+.seg{flex:none}
+.board{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start}
+.bcol{background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:10px;min-width:0;transition:background .15s,border-color .15s}
+.bcol.main{background:var(--surface);border-color:var(--accent)}
+@media (min-width:1100px){.bcol.main{grid-column:span 2}}
+.bcol header{display:flex;align-items:center;gap:8px;padding:2px 4px 10px}
+.bcol header .n{margin-left:auto;color:var(--muted)}
+.bcol.dropover{background:var(--accent-soft);border-color:var(--accent);border-style:dashed}
+.bcol.add{display:grid;place-items:center;min-height:80px;border-style:dashed}
+.bcol .list{gap:6px}
+.bcol .task{box-shadow:none;border-bottom:0;border-radius:8px;background:var(--surface)}
+.bcol .task.wip{background:var(--work-soft)}
+.task[draggable=true]{cursor:grab}
+.task.dragging{opacity:.4}
+.bempty{color:var(--muted);font-size:.85rem;text-align:center;padding:14px 6px;border:1px dashed var(--line);border-radius:8px}
+.teamtg{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:.85rem;white-space:nowrap}
+.av.sm{width:18px;height:18px;font-size:.58rem}
 .empty{color:var(--muted);background:var(--surface2);border:1px dashed var(--line);border-radius:var(--r);padding:16px;text-align:center}
 .summary{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 0}
 .pill{font-size:.85rem;font-weight:700;border-radius:999px;padding:4px 11px;background:var(--surface);box-shadow:var(--shadow)}
@@ -209,7 +227,7 @@ details.fold summary{cursor:pointer;font-weight:700;color:var(--muted);font-size
 .att .lab{position:absolute;left:4px;bottom:4px;background:rgba(0,0,0,.6);color:#fff;font-size:.68rem;border-radius:4px;padding:1px 5px}
 .att.file{display:grid;place-items:center;font-size:.8rem;color:var(--muted);text-align:center;padding:6px}
 .pinlist{font-size:.85rem;margin:0 0 12px;padding-left:20px}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom,0px));z-index:60;background:var(--ink);color:var(--bg);border-radius:10px;padding:10px 14px;display:flex;gap:14px;align-items:center;font-size:.9rem;max-width:calc(100% - 32px)}
+.toast{position:fixed;width:max-content;left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom,0px));z-index:60;background:var(--ink);color:var(--bg);border-radius:10px;padding:10px 14px;display:flex;gap:14px;align-items:center;font-size:.9rem;max-width:calc(100% - 32px)}
 .toast button{background:none;border:0;color:var(--accent-soft);font-weight:700}
 @media (min-width:900px){.toast{bottom:40px}}
 /* annotator */
@@ -361,20 +379,25 @@ function mentions(t, name){
   if(!re){ re = new RegExp("(^|[^\\p{L}\\p{N}])@?" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "iu"); mentionRe.set(name, re); }
   return re.test((t.title || "") + "\n" + (t.note || ""));
 }
+try { S.listMode = localStorage.getItem("wb_listmode") || "liste"; } catch(_){ S.listMode = "liste"; }
+const team = () => S.team || [];
+const isTeam = n => !!n && team().some(x => x.toLowerCase() === String(n).toLowerCase());
 const personTasks = name => openTasks().filter(t => !isHiddenRec(t) && mentions(t, name));
 // gespeicherte Personenliste: liegt als besonderer Eintrag "__people" in der Tabelle der Bereiche
-async function savePeople(list){
+async function savePeople(list, team){
   S.peopleList = [...new Set(list.map(cleanWho).filter(Boolean))];
+  if(team) S.team = [...new Set(team.map(cleanWho).filter(Boolean))];
+  S.team = (S.team || []).filter(n => S.peopleList.some(p => p.toLowerCase() === n.toLowerCase()));
   try {
     dirty.add("areas/__people");
-    await idbLocalWrite("areas/__people", { col: "areas", id: "__people", data: { names: S.peopleList }, deleted: false });
+    await idbLocalWrite("areas/__people", { col: "areas", id: "__people", data: { names: S.peopleList, team: S.team }, deleted: false });
   } catch(e){}
   kick(); render();
 }
 function canonWho(v){ v = cleanWho(v); if(!v) return null; const hit = people().find(p => p.name.toLowerCase() === v.toLowerCase()); return hit ? hit.name : v; }
 const initials = n => n.split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
 let sb = null; // Supabase-Client
-const BUCKET = "anhaenge", COLS = ["areas", "tasks", "meetings"], APP_VERSION = "V6";
+const BUCKET = "anhaenge", COLS = ["areas", "tasks", "meetings"], APP_VERSION = "V7";
 const areaById = id => S.areas.find(a => a.id === id);
 const color = a => a ? a.color : "var(--muted)";
 const openTasks = () => S.tasks.filter(t => !t.done);
@@ -444,6 +467,7 @@ async function loadLocal(){
   for(const c of COLS) S[c] = rows.filter(r => r.col === c && !r.deleted && r.id !== "__people").map(r => ({ id: r.id, ...r.data }));
   const pl = rows.find(r => r.col === "areas" && r.id === "__people" && !r.deleted);
   S.peopleList = pl && Array.isArray(pl.data.names) ? pl.data.names : [];
+  S.team = pl && Array.isArray(pl.data.team) ? pl.data.team : [];
   sortMeetings();
 }
 async function saveDoc(col, obj){
@@ -738,7 +762,7 @@ async function applyRemote(col, r){
   if(dirty.has(key)) return; // eigene, noch nicht hochgeladene Änderung hat Vorrang
   const ok = await idbRemoteWrite(key, { col, id: r.id, data: r.data, deleted: !!r.deleted, updated_at: r.updated_at });
   if(!ok || dirty.has(key)) return;
-  if(col === "areas" && r.id === "__people"){ S.peopleList = !r.deleted && Array.isArray(r.data.names) ? r.data.names : []; if(!document.querySelector(".sheet, #anno, #viewer")) scheduleRender(); return; }
+  if(col === "areas" && r.id === "__people"){ S.peopleList = !r.deleted && Array.isArray(r.data.names) ? r.data.names : []; S.team = !r.deleted && Array.isArray(r.data.team) ? r.data.team : []; if(!document.querySelector(".sheet, #anno, #viewer")) scheduleRender(); return; }
   const i = S[col].findIndex(x => x.id === r.id);
   if(r.deleted){ if(i >= 0) S[col].splice(i, 1); }
   else { const o = { id: r.id, ...r.data }; if(i >= 0) S[col][i] = o; else S[col].push(o); }
@@ -775,6 +799,24 @@ function setStatus2(id, st){
   toast(st === "arbeit" ? "In Arbeit." : "Wieder offen.", before);
 }
 
+/* ---------- Ziehen und Ablegen in "Verteilen" ---------- */
+document.addEventListener("dragstart", e => {
+  const row = e.target.closest && e.target.closest(".task[draggable=true]"); if(!row) return;
+  e.dataTransfer.setData("text/plain", row.dataset.tid); e.dataTransfer.effectAllowed = "move";
+  row.classList.add("dragging");
+});
+document.addEventListener("dragend", e => { document.querySelectorAll(".dragging, .dropover").forEach(x => x.classList.remove("dragging", "dropover")); });
+document.addEventListener("dragover", e => {
+  const col = e.target.closest && e.target.closest(".bcol[data-drop]"); if(!col || col.dataset.drop === "__other") return;
+  e.preventDefault(); e.dataTransfer.dropEffect = "move";
+  document.querySelectorAll(".dropover").forEach(x => x !== col && x.classList.remove("dropover")); col.classList.add("dropover");
+});
+document.addEventListener("drop", e => {
+  const col = e.target.closest && e.target.closest(".bcol[data-drop]"); if(!col || col.dataset.drop === "__other") return;
+  e.preventDefault(); col.classList.remove("dropover");
+  const id = e.dataTransfer.getData("text/plain"); if(id) assignTo(id, col.dataset.drop || null);
+});
+
 /* ---------- Kontextmenü (Rechtsklick, am Handy langes Drücken) ---------- */
 function closeCtx(){ const m = $("#ctx"); if(m) m.remove(); }
 function openCtx(id, x, y){
@@ -792,12 +834,13 @@ function openCtx(id, x, y){
     ${[1, 2, 3].map(p => item("pr", p, PRIO[p], prio(t) === p)).join("")}
     <hr>
     ${!t.done ? item("plan", today(), t.plan === today() ? "Aus Tagesplan von heute nehmen" : "In Tagesplan von heute", false) : ""}
+    ${!t.done && (team().length || t.who) ? `<div class="ctxl">Zuweisen</div>${item("who", "", "Hauptliste (nicht zugeteilt)", !t.who)}${team().map(n => item("who", esc(n), `<span class="av sm">${esc(initials(n))}</span>${esc(n)}`, (t.who || "").toLowerCase() === n.toLowerCase())).join("")}<hr>` : ""}
     ${item("open", "", "Öffnen …", false)}`;
   document.body.appendChild(m);
   const r = m.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight;
   m.style.left = Math.max(8, Math.min(x, W - r.width - 8)) + "px";
   m.style.top = Math.max(8, Math.min(y, H - r.height - 8)) + "px";
-  m.dataset.id = id;
+  m.dataset.id = id; ctxAt = Date.now();
   const first = m.querySelector('[aria-checked="true"]') || m.querySelector("button"); if(first) first.focus({ preventScroll: true });
 }
 document.addEventListener("contextmenu", e => {
@@ -807,7 +850,8 @@ document.addEventListener("contextmenu", e => {
   openCtx(row.dataset.tid, e.clientX, e.clientY);
 });
 document.addEventListener("pointerdown", e => { if($("#ctx") && !e.target.closest("#ctx")) closeCtx(); }, true);
-window.addEventListener("scroll", closeCtx, { passive: true });
+let ctxAt = 0; // Menü nicht durch Scroll-Ereignisse direkt nach dem Öffnen (z. B. durch Neuaufbau) schliessen
+window.addEventListener("scroll", () => { if(Date.now() - ctxAt > 400) closeCtx(); }, { passive: true });
 window.addEventListener("resize", closeCtx);
 document.addEventListener("click", e => {
   const b = e.target.closest("#ctx [data-ctx]"); if(!b) return;
@@ -817,6 +861,7 @@ document.addEventListener("click", e => {
   if(b.dataset.ctx === "st") setStatus2(id, v);
   else if(b.dataset.ctx === "pr") putTask({ ...t, prio: +v });
   else if(b.dataset.ctx === "plan"){ if(t.plan === v) putTask({ ...t, plan: null, planTime: null, planEnd: null }); else addToPlan(id, v); }
+  else if(b.dataset.ctx === "who") assignTo(id, v || null);
   else if(b.dataset.ctx === "open") openTask(id);
 }, true);
 
@@ -827,7 +872,7 @@ function taskRow(t, opts = {}){
   const cls = n === null ? "" : n < 0 ? "late" : n === 0 ? "today" : "";
   const nAtt = (t.att || []).length;
   const wip = !t.done && t.status === "arbeit";
-  return `<div class="task p${prio(t)} ${t.done ? "isdone" : ""} ${wip ? "wip" : ""}" data-tid="${t.id}" style="--ac:${color(a)}">
+  return `<div class="task p${prio(t)} ${t.done ? "isdone" : ""} ${wip ? "wip" : ""}" data-tid="${t.id}" ${opts.drag ? 'draggable="true"' : ""} style="--ac:${color(a)}">
     <button class="chk ${t.done ? "on" : ""}" data-act="${t.done ? "reopen" : "done"}" data-id="${t.id}" aria-label="${t.done ? "Wieder öffnen" : "Erledigt"}: ${esc(t.title)}">${I.check}</button>
     <div class="body" data-act="open" data-id="${t.id}">
       <div class="t">${prio(t) === 1 ? `<span class="prio p1">Hoch</span> ` : ""}${esc(t.title)}</div>
@@ -844,7 +889,7 @@ function taskRow(t, opts = {}){
     </div>
     <div class="side">
       ${t.due ? `<span class="due ${cls}">${esc(dueLabel(t.due))}${t.planTime && t.plan === t.due ? " " + esc(t.planTime) + (t.planEnd ? "–" + esc(t.planEnd) : "") : ""}</span>` : ""}
-      ${t.who ? `<button class="whotag" data-act="whof" data-id="${esc(t.who)}" title="Delegiert an ${esc(t.who)}"><span class="av">${esc(initials(t.who))}</span>${esc(t.who)}</button>` : ""}
+      ${t.who && !opts.hideWho ? `<button class="whotag" data-act="whof" data-id="${esc(t.who)}" title="Delegiert an ${esc(t.who)}"><span class="av">${esc(initials(t.who))}</span>${esc(t.who)}</button>` : ""}
     </div>
   </div>`;
 }
@@ -1029,6 +1074,7 @@ function viewListe(){
   let ts = openTasks().filter(t => !isHiddenRec(t));
   if(S.listArea !== "alle") ts = ts.filter(t => (t.area || "__inbox") === S.listArea);
   const ppl = people().map(p => ({ ...p, n: personTasks(p.name).length })).filter(p => p.n || p.saved);
+  const tsBoard = (S.q ? ts.filter(t => (t.title + " " + (t.note || "") + " " + (t.who || "")).toLowerCase().includes(S.q.toLowerCase())) : ts).slice().sort(S.listSort === "prio" ? byPrio : byDue);
   const W = S.listWho || "alle";
   if(W === "__me") ts = ts.filter(t => !t.who);
   else if(W === "__del") ts = ts.filter(t => t.who);
@@ -1036,7 +1082,12 @@ function viewListe(){
   else if(W !== "alle") ts = ts.filter(t => mentions(t, W));
   if(S.q) ts = ts.filter(t => (t.title + " " + (t.note || "") + " " + (t.who || "")).toLowerCase().includes(S.q.toLowerCase()));
   ts.sort(S.listSort === "prio" ? byPrio : byDue);
-  return `<h1>Alle offenen Aufgaben</h1><p class="sub">Kompakt zum Abarbeiten am PC. Geplante Wiederholungen sind ausgeblendet.</p>
+  const board = S.listMode === "team";
+  document.body.classList.toggle("wide", board);
+  return `<div class="row" style="justify-content:space-between;align-items:flex-end">
+      <div><h1>${board ? "Verteilen" : "Alle offenen Aufgaben"}</h1><p class="sub">${board ? "Links die Hauptliste mit allem, was noch niemandem zugeteilt ist, daneben je eine Liste pro Teammitglied. Aufgaben mit der Maus hinüberziehen oder per Rechtsklick zuweisen." : "Kompakt zum Abarbeiten am PC. Geplante Wiederholungen sind ausgeblendet."}</p></div>
+      <div class="chips seg" role="group" aria-label="Ansicht"><button class="chip" data-act="lmode" data-id="liste" aria-pressed="${!board}">Liste</button><button class="chip" data-act="lmode" data-id="team" aria-pressed="${board}">Verteilen</button></div>
+    </div>
     <div class="toolbar">
       <input type="search" id="q" placeholder="Suchen …" value="${esc(S.q)}" aria-label="Aufgaben durchsuchen">
       <div class="chips" role="group" aria-label="Sortierung"><button class="chip" data-act="ls" data-id="due" aria-pressed="${S.listSort !== "prio"}">Nach Datum</button><button class="chip" data-act="ls" data-id="prio" aria-pressed="${S.listSort === "prio"}">Nach Priorität</button></div>
@@ -1046,7 +1097,7 @@ function viewListe(){
       <button class="chip" data-act="lf" data-id="__inbox" aria-pressed="${S.listArea === "__inbox"}">Eingang</button>
       ${areas.map(a => `<button class="chip" data-act="lf" data-id="${a.id}" aria-pressed="${S.listArea === a.id}"><span class="dot" style="--ac:${a.color}"></span>${esc(a.name)}</button>`).join("")}
     </div>
-    <div class="chips" role="group" aria-label="Nach Person filtern" style="margin-top:8px">
+    ${board ? viewBoard(tsBoard) : `<div class="chips" role="group" aria-label="Nach Person filtern" style="margin-top:8px">
       <button class="chip" data-act="lw" data-id="alle" aria-pressed="${W === "alle"}">Alle Personen</button>
       <button class="chip" data-act="lw" data-id="__me" aria-pressed="${W === "__me"}">Selbst erledigen</button>
       <button class="chip" data-act="lw" data-id="__del" aria-pressed="${W === "__del"}">Alle delegierten</button>
@@ -1055,7 +1106,28 @@ function viewListe(){
       <button class="chip" data-act="ppl" title="Personen hinzufügen oder entfernen">+ Person</button>
     </div>
     ${!["alle", "__me", "__del", "__wip"].includes(W) ? `<p class="sub" style="margin-top:8px">Alle offenen Aufgaben, in denen <b>${esc(W)}</b> vorkommt: delegiert, im Titel oder in der Notiz.</p>` : ""}
-    <div class="compact" style="margin-top:12px">${ts.length ? `<div class="list">${ts.map(t => taskRow(t)).join("")}</div>` : `<div class="empty">Keine passenden Aufgaben.</div>`}</div>`;
+    <div class="compact" style="margin-top:12px">${ts.length ? `<div class="list">${ts.map(t => taskRow(t)).join("")}</div>` : `<div class="empty">Keine passenden Aufgaben.</div>`}</div>`}`;
+}
+function viewBoard(ts){
+  const tm = team();
+  const cols = [{ key: "", name: "Hauptliste", sub: "nicht zugeteilt", items: ts.filter(t => !t.who) }];
+  for(const n of tm) cols.push({ key: n, name: n, items: ts.filter(t => t.who && t.who.toLowerCase() === n.toLowerCase()) });
+  const other = ts.filter(t => t.who && !isTeam(t.who));
+  if(other.length) cols.push({ key: "__other", name: "Andere Personen", sub: "nicht im Team", items: other });
+  return `${!tm.length ? `<div class="hidden-note" style="margin-top:12px"><span>Noch kein Team eingetragen. Lege fest, welche Mitarbeitenden Aufgaben für dich übernehmen.</span><button class="btn pri" data-act="ppl">Team festlegen</button></div>` : ""}
+    <div class="board" style="margin-top:14px">${cols.map(c => `<section class="bcol ${c.key === "" ? "main" : ""}" data-drop="${esc(c.key)}">
+      <header>${c.key && c.key !== "__other" ? `<span class="av">${esc(initials(c.name))}</span>` : ""}<b>${esc(c.name)}</b>${c.sub ? ` <span class="sub">${c.sub}</span>` : ""}<span class="mono n">${c.items.length}</span></header>
+      <div class="list compact">${c.items.map(t => taskRow(t, { drag: true, hideWho: c.key && c.key !== "__other" })).join("") || `<div class="bempty">${c.key === "" ? "Alles verteilt." : "Keine offenen Aufgaben. Hierher ziehen zum Zuweisen."}</div>`}</div>
+    </section>`).join("")}
+    <section class="bcol add"><button class="btn ghost" data-act="ppl">+ Team bearbeiten</button></section></div>`;
+}
+async function assignTo(id, name){
+  const t = S.tasks.find(x => x.id === id); if(!t) return;
+  const who = name ? canonWho(name) : null;
+  if((t.who || null) === who) return;
+  const before = JSON.parse(JSON.stringify(t));
+  await putTask({ ...t, who });
+  toast(who ? `Zugewiesen an ${who}.` : "Zurück in die Hauptliste.", before);
 }
 
 let meetDraft = { title: "", area: "", notes: "", result: null, busy: false, err: "" };
@@ -1290,18 +1362,26 @@ function capHint(v){
   return parts.length ? "Erkannt: " + parts.join(" · ") + "." : "";
 }
 function openPeople(){
-  const ppl = people();
-  sheet(`<div class="grip"></div><h3>Personen</h3>
-    <p class="sub">Personen, nach denen du filtern willst. Die App findet sie in Titeln, Notizen und bei delegierten Aufgaben. Wer schon einmal delegiert wurde, steht automatisch hier.</p>
-    <div class="addrow"><input type="text" id="pnew" placeholder="Name, z. B. Tobi" autocapitalize="words" enterkeyhint="done"><button class="btn pri" data-act="padd2">Hinzufügen</button></div>
-    <div class="list" style="margin-top:12px">${ppl.map(p => `<div class="prow"><span class="av">${esc(initials(p.name))}</span><span style="flex:1;min-width:0"><b>${esc(p.name)}</b> <span class="sub">${personTasks(p.name).length} offen${p.c ? " · " + p.c + " delegiert" : ""}</span></span>${p.saved ? `<button class="btn ghost" data-act="pdel" data-id="${esc(p.name)}">Entfernen</button>` : ""}</div>`).join("") || `<div class="empty">Noch keine Personen.</div>`}</div>
+  const ppl = people().sort((a, b) => isTeam(b.name) - isTeam(a.name) || a.name.localeCompare(b.name));
+  sheet(`<div class="grip"></div><h3>Personen und Team</h3>
+    <p class="sub">Mit <b>Team</b> markierst du die Mitarbeitenden, die Aufgaben für dich übernehmen. Sie bekommen in der Ansicht „Verteilen“ eine eigene Liste. Die übrigen Namen dienen nur zum Filtern; die App findet sie in Titeln, Notizen und bei delegierten Aufgaben.</p>
+    <div class="addrow"><input type="text" id="pnew" placeholder="Name, z. B. Arno" autocapitalize="words" enterkeyhint="done"><button class="btn pri" data-act="padd2" data-id="team">Ins Team</button><button class="btn" data-act="padd2">Nur Person</button></div>
+    <div class="list" style="margin-top:12px">${ppl.map(p => `<div class="prow"><span class="av">${esc(initials(p.name))}</span><span style="flex:1;min-width:0"><b>${esc(p.name)}</b> <span class="sub">${personTasks(p.name).length} offen${p.c ? " · " + p.c + " delegiert" : ""}</span></span>
+      <label class="teamtg"><input type="checkbox" data-act="pteam" data-id="${esc(p.name)}" ${isTeam(p.name) ? "checked" : ""}> Team</label>
+      ${p.saved ? `<button class="btn ghost" data-act="pdel" data-id="${esc(p.name)}">Entfernen</button>` : ""}</div>`).join("") || `<div class="empty">Noch keine Personen.</div>`}</div>
     <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" data-act="close">Fertig</button></div>`);
   setTimeout(() => $("#pnew") && $("#pnew").focus(), 50);
 }
-async function addPerson(){
+async function addPerson(toTeam){
   const v = cleanWho($("#pnew") && $("#pnew").value); if(!v) return;
-  if(!people().some(p => p.name.toLowerCase() === v.toLowerCase()) || !(S.peopleList || []).some(n => n.toLowerCase() === v.toLowerCase())) await savePeople([...(S.peopleList || []), canonWho(v)]);
+  const name = canonWho(v);
+  const list = (S.peopleList || []).some(n => n.toLowerCase() === name.toLowerCase()) ? [...S.peopleList] : [...(S.peopleList || []), name];
+  await savePeople(list, toTeam && !isTeam(name) ? [...team(), name] : team());
   openPeople();
+}
+async function setTeam(name, on){
+  const list = (S.peopleList || []).some(n => n.toLowerCase() === name.toLowerCase()) ? [...S.peopleList] : [...(S.peopleList || []), name];
+  await savePeople(list, on ? [...team().filter(n => n.toLowerCase() !== name.toLowerCase()), name] : team().filter(n => n.toLowerCase() !== name.toLowerCase()));
 }
 function whoField(id, val){
   return `<div class="field"><label for="${id}">Delegiert an</label>
@@ -1310,7 +1390,8 @@ function whoField(id, val){
     <div class="chips" id="${id}-chips" style="margin-top:6px">${whoChipsHtml(id, val)}</div></div>`;
 }
 function whoChipsHtml(id, val){
-  return people().slice(0, 8).map(p => `<button class="chip who" data-act="whopick" data-for="${id}" data-id="${esc(p.name)}" aria-pressed="${(val || "").toLowerCase() === p.name.toLowerCase()}"><span class="av">${esc(initials(p.name))}</span>${esc(p.name)}</button>`).join("");
+  const ppl = people().sort((a, b) => isTeam(b.name) - isTeam(a.name));
+  return ppl.slice(0, 8).map(p => `<button class="chip who" data-act="whopick" data-for="${id}" data-id="${esc(p.name)}" aria-pressed="${(val || "").toLowerCase() === p.name.toLowerCase()}"><span class="av">${esc(initials(p.name))}</span>${esc(p.name)}</button>`).join("");
 }
 function whoChips(id){ const box = document.getElementById(id + "-chips"), inp = document.getElementById(id); if(box && inp) box.innerHTML = whoChipsHtml(id, inp.value); }
 async function saveCapture(){
@@ -1660,7 +1741,7 @@ async function saveMeeting(){
 /* ---------- events ---------- */
 document.addEventListener("click", async e => {
   const tab = e.target.closest("[data-tab]");
-  if(tab){ S.tab = tab.dataset.tab; if(S.tab === "bereiche") S.area = null; render(); window.scrollTo(0, 0); return; }
+  if(tab){ document.body.classList.remove("wide"); S.tab = tab.dataset.tab; if(S.tab === "bereiche") S.area = null; render(); window.scrollTo(0, 0); return; }
   const el = e.target.closest("[data-act]"); if(!el) return;
   const act = el.dataset.act, id = el.dataset.id;
   if(act === "scrim"){ if(e.target === el) closeSheet(); return; }
@@ -1697,7 +1778,9 @@ document.addEventListener("click", async e => {
     case "lw": S.listWho = id; render(); break;
     case "wipl": S.tab = "liste"; S.listWho = "__wip"; S.listArea = "alle"; render(); window.scrollTo(0, 0); break;
     case "ppl": openPeople(); break;
-    case "padd2": addPerson(); break;
+    case "padd2": addPerson(id === "team"); break;
+    case "lmode": S.listMode = id; try { localStorage.setItem("wb_listmode", id); } catch(_){} render(); break;
+    case "pteam": await setTeam(id, el.checked); openPeople(); break;
     case "pdel": await savePeople((S.peopleList || []).filter(n => n.toLowerCase() !== id.toLowerCase())); if(S.listWho === id) S.listWho = "alle"; openPeople(); break;
     case "whof": S.tab = "liste"; S.listWho = id; S.listArea = "alle"; render(); window.scrollTo(0, 0); break;
     case "addin": openCapture(id); break;
@@ -1779,7 +1862,7 @@ document.addEventListener("keydown", e => {
   }
   if(e.key === "Enter" && e.target.id === "ct"){ e.preventDefault(); saveCapture(); }
   if(e.key === "Enter" && e.target.id === "padd"){ e.preventDefault(); addPlanEntry(); }
-  if(e.key === "Enter" && e.target.id === "pnew"){ e.preventDefault(); addPerson(); }
+  if(e.key === "Enter" && e.target.id === "pnew"){ e.preventDefault(); addPerson(true); }
   if(e.key === "Escape" && $("#layer").innerHTML) closeSheet();
 });
 $("#fab").onclick = () => openCapture(S.tab === "bereiche" && S.area && S.area !== "__inbox" ? S.area : "");
