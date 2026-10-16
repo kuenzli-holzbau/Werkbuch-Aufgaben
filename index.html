@@ -74,7 +74,7 @@ nav.tabs button[aria-current="page"]{color:var(--accent)}
 .list{display:flex;flex-direction:column;gap:6px}
 .task{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;background:var(--surface);border-radius:var(--r);padding:10px 12px;box-shadow:var(--shadow);border-left:5px solid var(--ac,var(--line))}
 .task .body{min-width:0;cursor:pointer}
-.task .t{font-weight:700;overflow-wrap:anywhere}
+.task .t{font-weight:700;overflow-wrap:break-word;word-break:normal;hyphens:auto}
 .task .meta{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:.8rem;color:var(--muted);margin-top:2px;align-items:center}
 .chk{width:30px;height:30px;border-radius:50%;border:2px solid var(--line);background:var(--surface2);display:grid;place-items:center;padding:0}
 .chk:hover{border-color:var(--accent)}
@@ -162,7 +162,13 @@ body.wide .wrap{max-width:1500px}
 .bcol{background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:10px;min-width:0;transition:background .15s,border-color .15s}
 .bcol.main{background:var(--surface);border-color:var(--accent)}
 @media (min-width:1100px){.bcol.main{grid-column:span 2}}
-.bcol header{display:flex;align-items:center;gap:8px;padding:2px 4px 10px}
+.bcol header{display:flex;align-items:center;gap:8px;padding:2px 4px 10px;flex-wrap:wrap}
+.bcol header b{white-space:nowrap}
+.bcol header .sub{font-size:.78rem}
+/* schmale Spalten: Datum und Person unter den Titel statt daneben */
+.bcol:not(.main) .task{grid-template-columns:auto minmax(0,1fr);row-gap:4px}
+.bcol:not(.main) .task .side{grid-column:2;flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:6px}
+.bcol:not(.main) .task .side:not(:has(*)){display:none}
 .bcol header .n{margin-left:auto;color:var(--muted)}
 .bcol.dropover{background:var(--accent-soft);border-color:var(--accent);border-style:dashed}
 .bcol.add{display:grid;place-items:center;min-height:80px;border-style:dashed}
@@ -174,6 +180,34 @@ body.wide .wrap{max-width:1500px}
 .bempty{color:var(--muted);font-size:.85rem;text-align:center;padding:14px 6px;border:1px dashed var(--line);border-radius:8px}
 .teamtg{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:.85rem;white-space:nowrap}
 .av.sm{width:18px;height:18px;font-size:.58rem}
+.pres{margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 12px}
+.pres summary{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.btn.sm{padding:4px 10px;font-size:.82rem}
+.pgrid-wrap{overflow-x:auto;margin-top:8px}
+.pgrid{border-collapse:separate;border-spacing:3px;font-size:.8rem;min-width:100%}
+.pgrid thead th{font-weight:400;color:var(--muted);text-align:center;min-width:38px;line-height:1.15;padding:2px}
+.pgrid thead th span{display:block;font-size:.7rem}
+.pgrid thead th b{display:block;color:var(--ink);font-family:var(--f-mono);font-size:.82rem}
+.pgrid thead th i{display:block;font-style:normal;font-size:.62rem;text-transform:uppercase;letter-spacing:.05em}
+.pgrid thead th.today b{color:var(--accent)}
+.pgrid tbody th{text-align:left;white-space:nowrap;padding-right:8px;font-weight:700}
+.pgrid tbody th .pn{display:flex;align-items:center;gap:6px}
+.pgrid td{padding:0}
+.pgrid td button{width:100%;min-width:36px;height:30px;border:0;border-radius:6px;background:var(--accent-soft);color:#fff;font-weight:800;font-size:.72rem;padding:0;position:relative;overflow:hidden}
+.pgrid td.weg button{background:var(--ab)}
+.pgrid td.halb button{background:var(--accent-soft)}
+.pgrid td.halb button span{position:absolute;top:0;bottom:0;width:50%;display:grid;place-items:center;background:var(--ab)}
+.pgrid td.halb button span.vm{left:0} .pgrid td.halb button span.nm{right:0}
+.pgrid td.today button{box-shadow:inset 0 0 0 2px var(--accent)}
+.pgrid .wk{border-left:2px solid var(--line);padding-left:4px}
+.plegend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.72rem;color:var(--muted);margin:6px 0 2px}
+.plegend i,.tdot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.pres-st{font-size:.72rem;font-weight:700;border-radius:999px;padding:1px 8px;border:0;white-space:nowrap}
+.pres-st.da{background:var(--accent-soft);color:var(--accent)}
+.pres-st.weg{background:var(--late-soft);color:var(--late);cursor:pointer}
+.pill.away{background:var(--late-soft);color:var(--late);border:0;cursor:pointer}
+.absrow{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;text-align:left;background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%}
+.absrow.on{border-color:var(--accent)}
 .empty{color:var(--muted);background:var(--surface2);border:1px dashed var(--line);border-radius:var(--r);padding:16px;text-align:center}
 .summary{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 0}
 .pill{font-size:.85rem;font-weight:700;border-radius:999px;padding:4px 11px;background:var(--surface);box-shadow:var(--shadow)}
@@ -390,14 +424,14 @@ async function savePeople(list, team){
   S.team = (S.team || []).filter(n => S.peopleList.some(p => p.toLowerCase() === n.toLowerCase()));
   try {
     dirty.add("areas/__people");
-    await idbLocalWrite("areas/__people", { col: "areas", id: "__people", data: { names: S.peopleList, team: S.team }, deleted: false });
+    await idbLocalWrite("areas/__people", { col: "areas", id: "__people", data: { names: S.peopleList, team: S.team, absences: S.absences || [] }, deleted: false });
   } catch(e){}
   kick(); render();
 }
 function canonWho(v){ v = cleanWho(v); if(!v) return null; const hit = people().find(p => p.name.toLowerCase() === v.toLowerCase()); return hit ? hit.name : v; }
 const initials = n => n.split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
 let sb = null; // Supabase-Client
-const BUCKET = "anhaenge", COLS = ["areas", "tasks", "meetings"], APP_VERSION = "V7";
+const BUCKET = "anhaenge", COLS = ["areas", "tasks", "meetings"], APP_VERSION = "V8";
 const areaById = id => S.areas.find(a => a.id === id);
 const color = a => a ? a.color : "var(--muted)";
 const openTasks = () => S.tasks.filter(t => !t.done);
@@ -468,6 +502,7 @@ async function loadLocal(){
   const pl = rows.find(r => r.col === "areas" && r.id === "__people" && !r.deleted);
   S.peopleList = pl && Array.isArray(pl.data.names) ? pl.data.names : [];
   S.team = pl && Array.isArray(pl.data.team) ? pl.data.team : [];
+  S.absences = pl && Array.isArray(pl.data.absences) ? pl.data.absences : [];
   sortMeetings();
 }
 async function saveDoc(col, obj){
@@ -762,7 +797,7 @@ async function applyRemote(col, r){
   if(dirty.has(key)) return; // eigene, noch nicht hochgeladene Änderung hat Vorrang
   const ok = await idbRemoteWrite(key, { col, id: r.id, data: r.data, deleted: !!r.deleted, updated_at: r.updated_at });
   if(!ok || dirty.has(key)) return;
-  if(col === "areas" && r.id === "__people"){ S.peopleList = !r.deleted && Array.isArray(r.data.names) ? r.data.names : []; S.team = !r.deleted && Array.isArray(r.data.team) ? r.data.team : []; if(!document.querySelector(".sheet, #anno, #viewer")) scheduleRender(); return; }
+  if(col === "areas" && r.id === "__people"){ S.peopleList = !r.deleted && Array.isArray(r.data.names) ? r.data.names : []; S.team = !r.deleted && Array.isArray(r.data.team) ? r.data.team : []; S.absences = !r.deleted && Array.isArray(r.data.absences) ? r.data.absences : []; if(!document.querySelector(".sheet, #anno, #viewer")) scheduleRender(); return; }
   const i = S[col].findIndex(x => x.id === r.id);
   if(r.deleted){ if(i >= 0) S[col].splice(i, 1); }
   else { const o = { id: r.id, ...r.data }; if(i >= 0) S[col][i] = o; else S[col].push(o); }
@@ -834,7 +869,7 @@ function openCtx(id, x, y){
     ${[1, 2, 3].map(p => item("pr", p, PRIO[p], prio(t) === p)).join("")}
     <hr>
     ${!t.done ? item("plan", today(), t.plan === today() ? "Aus Tagesplan von heute nehmen" : "In Tagesplan von heute", false) : ""}
-    ${!t.done && (team().length || t.who) ? `<div class="ctxl">Zuweisen</div>${item("who", "", "Hauptliste (nicht zugeteilt)", !t.who)}${team().map(n => item("who", esc(n), `<span class="av sm">${esc(initials(n))}</span>${esc(n)}`, (t.who || "").toLowerCase() === n.toLowerCase())).join("")}<hr>` : ""}
+    ${!t.done && (team().length || t.who) ? `<div class="ctxl">Zuweisen</div>${item("who", "", "Hauptliste (nicht zugeteilt)", !t.who)}${team().map(n => { const v = availability(n, t.due && t.due > today() ? t.due : today()); return item("who", esc(n), `<span class="av sm">${esc(initials(n))}</span>${esc(n)}${v === "weg" || v === "halb" ? ` <span class="sub">(${esc(absLabel(n, t.due && t.due > today() ? t.due : today()))})</span>` : ""}`, (t.who || "").toLowerCase() === n.toLowerCase()); }).join("")}<hr>` : ""}
     ${item("open", "", "Öffnen …", false)}`;
   document.body.appendChild(m);
   const r = m.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight;
@@ -958,6 +993,7 @@ function viewJetzt(){
       ${late.length ? `<span class="pill late">${late.length} überfällig</span>` : ""}
       ${tod.length ? `<span class="pill today">${tod.length} heute</span>` : ""}
       <span class="pill">${soon.length} in den nächsten Tagen</span>
+      ${team().filter(n => ["weg", "halb"].includes(availability(n, today()))).map(n => `<button class="pill away" data-act="abscell" data-who="${esc(n)}" data-day="${today()}" title="Abwesenheit ansehen">${esc(n)}: ${esc(absLabel(n, today()))}</button>`).join("")}
       ${nHigh ? `<span class="pill late">${nHigh} hohe Priorität</span>` : ""}
       ${openTasks().some(t => t.status === "arbeit") ? `<button class="pill wip" data-act="wipl">${openTasks().filter(t => t.status === "arbeit").length} in Arbeit</button>` : ""}
       ${MS.tok && calOfDay(today()).filter(e => !e.allDay && e.end.slice(11, 16) > new Date().toTimeString().slice(0, 5)).length ? `<button class="pill" data-tab="tag">${I.cal.replace("<svg", '<svg width="13" height="13" style="vertical-align:-2px"')} ${calOfDay(today()).filter(e => !e.allDay && e.end.slice(11, 16) > new Date().toTimeString().slice(0, 5)).length} Termine heute</button>` : ""}
@@ -1115,19 +1151,100 @@ function viewBoard(ts){
   const other = ts.filter(t => t.who && !isTeam(t.who));
   if(other.length) cols.push({ key: "__other", name: "Andere Personen", sub: "nicht im Team", items: other });
   return `${!tm.length ? `<div class="hidden-note" style="margin-top:12px"><span>Noch kein Team eingetragen. Lege fest, welche Mitarbeitenden Aufgaben für dich übernehmen.</span><button class="btn pri" data-act="ppl">Team festlegen</button></div>` : ""}
+    ${tm.length ? `<details class="fold pres" ${S.presOpen !== false ? "open" : ""}><summary>Anwesenheit nächste 2 Wochen <button class="btn ghost sm" data-act="absnew">+ Abwesenheit eintragen</button></summary>${presenceGrid(tm, nextWorkdays(10))}</details>` : ""}
     <div class="board" style="margin-top:14px">${cols.map(c => `<section class="bcol ${c.key === "" ? "main" : ""}" data-drop="${esc(c.key)}">
-      <header>${c.key && c.key !== "__other" ? `<span class="av">${esc(initials(c.name))}</span>` : ""}<b>${esc(c.name)}</b>${c.sub ? ` <span class="sub">${c.sub}</span>` : ""}<span class="mono n">${c.items.length}</span></header>
+      <header>${c.key && c.key !== "__other" ? `<span class="av">${esc(initials(c.name))}</span>` : ""}<b>${esc(c.name)}</b>${c.sub ? ` <span class="sub">${c.sub}</span>` : ""}<span class="mono n">${c.items.length}</span>
+        ${c.key && c.key !== "__other" ? (() => { const v = availability(c.key, today()); return v === "da" || v === "we" ? `<span class="pres-st da">heute da</span>` : `<button class="pres-st weg" data-act="abscell" data-who="${esc(c.key)}" data-day="${today()}">${esc(absLabel(c.key, today()))}</button>`; })() : ""}</header>
       <div class="list compact">${c.items.map(t => taskRow(t, { drag: true, hideWho: c.key && c.key !== "__other" })).join("") || `<div class="bempty">${c.key === "" ? "Alles verteilt." : "Keine offenen Aufgaben. Hierher ziehen zum Zuweisen."}</div>`}</div>
     </section>`).join("")}
     <section class="bcol add"><button class="btn ghost" data-act="ppl">+ Team bearbeiten</button></section></div>`;
 }
+/* ---------- Abwesenheiten ---------- */
+const ABS_TYPES = { ferien: ["Ferien", "F", "#2F6FB0"], krank: ["Krank", "K", "#C23B55"], schule: ["Schule", "S", "#2E8B6A"], kurs: ["Kurs", "Ku", "#7A55B8"], militaer: ["Militär", "M", "#6B7A3A"], kompensation: ["Kompensation", "Ko", "#C08A00"], andere: ["Abwesend", "A", "#6B746F"] };
+const PARTS = { ganz: "Ganzer Tag", vm: "Vormittag", nm: "Nachmittag" };
+const isWeekend = d => { const w = parse(d).getDay(); return w === 0 || w === 6; };
+const sameName = (a, b) => (a || "").toLowerCase() === (b || "").toLowerCase();
+function absOn(who, day){
+  return (S.absences || []).filter(a => sameName(a.who, who) && day >= a.from && (!a.to || day <= a.to) && (!a.weekly || parse(a.from).getDay() === parse(day).getDay()));
+}
+function availability(who, day){ // "da" | "halb" | "weg" | "we" (Wochenende)
+  if(isWeekend(day)) return "we";
+  const a = absOn(who, day); if(!a.length) return "da";
+  return a.some(x => (x.part || "ganz") === "ganz") || (a.some(x => x.part === "vm") && a.some(x => x.part === "nm")) ? "weg" : "halb";
+}
+function absEnd(who, day){ // letzter zusammenhängender Abwesenheitstag (Wochenenden überbrücken)
+  let d = day, last = day;
+  for(let i = 0; i < 120; i++){ d = addDays(d, 1); const v = availability(who, d); if(v === "we") continue; if(v === "da") break; last = d; }
+  return last;
+}
+function absLabel(who, day){
+  const a = absOn(who, day); if(!a.length) return "";
+  const t = ABS_TYPES[a[0].type] || ABS_TYPES.andere; const part = a[0].part && a[0].part !== "ganz" ? " " + PARTS[a[0].part] : "";
+  const end = availability(who, day) === "weg" ? absEnd(who, day) : day;
+  return t[0] + part + (end !== day ? " bis " + fmt(end) : day === today() ? " heute" : " " + fmt(day));
+}
+function absWarn(who, due){
+  if(!who || !due || !isTeam(who)) return "";
+  const v = availability(who, due);
+  return v === "weg" || v === "halb" ? `Achtung: ${who} ist am ${fmt(due)} abwesend (${absLabel(who, due)}).` : "";
+}
+function nextWorkdays(n, from = today()){ const out = []; let d = from; while(out.length < n){ if(!isWeekend(d)) out.push(d); d = addDays(d, 1); } return out; }
+function presenceGrid(names, days){
+  if(!names.length) return "";
+  const MON = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+  return `<div class="pgrid-wrap"><table class="pgrid"><thead><tr><th></th>${days.map((d, i) => { const dt = parse(d); const wk = dt.getDay() === 1 && i ? " wk" : ""; return `<th class="${d === today() ? "today" : ""}${wk}"><span>${WD[dt.getDay()]}</span><b>${dt.getDate()}</b>${dt.getDate() === 1 || i === 0 ? `<i>${MON[dt.getMonth()]}</i>` : ""}</th>`; }).join("")}</tr></thead>
+    <tbody>${names.map(n => `<tr><th><span class="pn"><span class="av sm">${esc(initials(n))}</span>${esc(n)}</span></th>${days.map((d, i) => {
+      const v = availability(n, d), a = absOn(n, d)[0]; const t = a ? (ABS_TYPES[a.type] || ABS_TYPES.andere) : null;
+      const wk = parse(d).getDay() === 1 && i ? " wk" : "";
+      return `<td class="${v}${d === today() ? " today" : ""}${wk}"><button data-act="abscell" data-who="${esc(n)}" data-day="${d}" ${t ? `style="--ab:${t[2]}"` : ""} title="${esc(n)}, ${fmt(d)}: ${v === "da" ? "da" : esc(absLabel(n, d))}${a && a.note ? " – " + esc(a.note) : ""}">${t ? `<span class="${a.part && a.part !== "ganz" ? "half " + a.part : ""}">${t[1]}</span>` : ""}</button></td>`;
+    }).join("")}</tr>`).join("")}</tbody></table></div>
+    <div class="plegend">${Object.values(ABS_TYPES).map(t => `<span><i style="background:${t[2]}"></i>${t[1]} = ${t[0]}</span>`).join("")}</div>`;
+}
+let ABSF = null;
+function openAbsence(who, day, editId){
+  const names = [...new Set([...team(), ...(S.peopleList || [])])];
+  const ex = editId ? (S.absences || []).find(a => a.id === editId) : null;
+  ABSF = ex ? { ...ex } : { id: uid(), who: who || names[0] || "", from: day || today(), to: day || today(), type: "ferien", part: "ganz", weekly: false, note: "" };
+  drawAbsence();
+}
+function drawAbsence(){
+  const f = ABSF;
+  const names = [...new Set([...team(), ...(S.peopleList || [])])];
+  const list = (S.absences || []).filter(a => sameName(a.who, f.who) && (a.weekly || !a.to || a.to >= today())).sort((a, b) => a.from.localeCompare(b.from));
+  sheet(`<div class="grip"></div><h3>Abwesenheit</h3>
+    <div class="field"><span class="lbl">Person</span><div class="chips">${names.map(n => `<button class="chip who" data-act="absf" data-k="who" data-id="${esc(n)}" aria-pressed="${sameName(f.who, n)}"><span class="av">${esc(initials(n))}</span>${esc(n)}</button>`).join("") || `<span class="sub">Zuerst unter „Personen und Team“ jemanden eintragen.</span>`}</div></div>
+    <div class="field"><span class="lbl">Grund</span><div class="chips">${Object.entries(ABS_TYPES).map(([k, t]) => `<button class="chip" data-act="absf" data-k="type" data-id="${k}" aria-pressed="${f.type === k}"><i class="tdot" style="background:${t[2]}"></i>${t[0]}</button>`).join("")}</div></div>
+    <div class="grid2">
+      <div class="field"><label for="abf">Von</label><input type="date" id="abf" value="${esc(f.from)}"></div>
+      <div class="field"><label for="abt">${f.weekly ? "Bis (leer = unbefristet)" : "Bis"}</label><input type="date" id="abt" value="${esc(f.to || "")}"></div>
+    </div>
+    <div class="field"><span class="lbl">Dauer pro Tag</span><div class="chips">${Object.entries(PARTS).map(([k, l]) => `<button class="chip" data-act="absf" data-k="part" data-id="${k}" aria-pressed="${(f.part || "ganz") === k}">${l}</button>`).join("")}</div></div>
+    <div class="field"><label><input type="checkbox" id="abw" ${f.weekly ? "checked" : ""}> Jede Woche am ${["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"][parse(f.from).getDay()]} (z. B. Berufsschule)</label></div>
+    <div class="field"><label for="abn">Notiz</label><input type="text" id="abn" value="${esc(f.note || "")}" placeholder="optional, z. B. Arztzeugnis bis"></div>
+    <div class="row" style="justify-content:space-between">
+      ${(S.absences || []).some(a => a.id === f.id) ? `<button class="btn danger" data-act="absdel" data-id="${f.id}">Löschen</button>` : "<span></span>"}
+      <div class="row"><button class="btn ghost" data-act="close">Schliessen</button><button class="btn pri" data-act="abssave">Speichern</button></div>
+    </div>
+    ${list.length ? `<h2>Eingetragene Abwesenheiten von ${esc(f.who)}</h2><div class="list">${list.map(a => { const t = ABS_TYPES[a.type] || ABS_TYPES.andere; return `<button class="absrow ${a.id === f.id ? "on" : ""}" data-act="absedit" data-id="${a.id}"><i class="tdot" style="background:${t[2]}"></i><b>${t[0]}</b><span>${a.weekly ? "jeden " + WD[parse(a.from).getDay()] + (a.to ? " bis " + fmt(a.to) : "") : fmt(a.from) + (a.to && a.to !== a.from ? " – " + fmt(a.to) : "")}${a.part && a.part !== "ganz" ? " · " + PARTS[a.part] : ""}</span>${a.note ? `<span class="sub">${esc(a.note)}</span>` : ""}</button>`; }).join("")}</div>` : ""}`);
+}
+function absSync(){ if(!ABSF || !$("#abf")) return; ABSF.from = $("#abf").value || ABSF.from; ABSF.to = $("#abt").value || ""; ABSF.weekly = $("#abw").checked; ABSF.note = $("#abn").value; }
+async function saveAbsence(){
+  absSync(); const f = ABSF;
+  if(!f.who){ toast("Bitte eine Person wählen."); return; }
+  if(!f.weekly && !f.to) f.to = f.from;
+  if(f.to && f.to < f.from){ toast("„Bis“ liegt vor „Von“."); return; }
+  const list = (S.absences || []).filter(a => a.id !== f.id); list.push({ ...f, to: f.to || null });
+  S.absences = list; await savePeople(S.peopleList || [], team());
+  closeSheet(); toast(`Abwesenheit für ${f.who} gespeichert.`);
+}
+
 async function assignTo(id, name){
   const t = S.tasks.find(x => x.id === id); if(!t) return;
   const who = name ? canonWho(name) : null;
   if((t.who || null) === who) return;
   const before = JSON.parse(JSON.stringify(t));
   await putTask({ ...t, who });
-  toast(who ? `Zugewiesen an ${who}.` : "Zurück in die Hauptliste.", before);
+  toast(who ? (absWarn(who, t.due || today()) || `Zugewiesen an ${who}.`) : "Zurück in die Hauptliste.", before);
 }
 
 let meetDraft = { title: "", area: "", notes: "", result: null, busy: false, err: "" };
@@ -1368,6 +1485,7 @@ function openPeople(){
     <div class="addrow"><input type="text" id="pnew" placeholder="Name, z. B. Arno" autocapitalize="words" enterkeyhint="done"><button class="btn pri" data-act="padd2" data-id="team">Ins Team</button><button class="btn" data-act="padd2">Nur Person</button></div>
     <div class="list" style="margin-top:12px">${ppl.map(p => `<div class="prow"><span class="av">${esc(initials(p.name))}</span><span style="flex:1;min-width:0"><b>${esc(p.name)}</b> <span class="sub">${personTasks(p.name).length} offen${p.c ? " · " + p.c + " delegiert" : ""}</span></span>
       <label class="teamtg"><input type="checkbox" data-act="pteam" data-id="${esc(p.name)}" ${isTeam(p.name) ? "checked" : ""}> Team</label>
+      <button class="btn ghost" data-act="abscell" data-who="${esc(p.name)}" data-day="${today()}">Abwesend</button>
       ${p.saved ? `<button class="btn ghost" data-act="pdel" data-id="${esc(p.name)}">Entfernen</button>` : ""}</div>`).join("") || `<div class="empty">Noch keine Personen.</div>`}</div>
     <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" data-act="close">Fertig</button></div>`);
   setTimeout(() => $("#pnew") && $("#pnew").focus(), 50);
@@ -1468,7 +1586,7 @@ async function saveTaskForm(id, silent){
                  : (t.plan && t.plan === t.due && t.planTime ? { planTime: null } : {});
   const pb = document.querySelector("[data-act=ep][aria-pressed=true]");
   await putTask({ ...t, title, area: $("#ea").value || null, due, rec, note: $("#en").value, prio: pb ? +pb.dataset.id : prio(t), who: canonWho($("#ew").value), status: t.done ? t.status || null : (document.querySelector("[data-act=es][aria-pressed=true]")?.dataset.id === "arbeit" ? "arbeit" : null), ...planPart });
-  if(!silent){ closeSheet(); toast("Gespeichert."); }
+  if(!silent){ closeSheet(); const nt = S.tasks.find(x => x.id === id); toast((nt && absWarn(nt.who, nt.due)) || "Gespeichert."); }
 }
 
 function openAreaEditor(id){
@@ -1779,6 +1897,12 @@ document.addEventListener("click", async e => {
     case "wipl": S.tab = "liste"; S.listWho = "__wip"; S.listArea = "alle"; render(); window.scrollTo(0, 0); break;
     case "ppl": openPeople(); break;
     case "padd2": addPerson(id === "team"); break;
+    case "abscell": { const ex = absOn(el.dataset.who, el.dataset.day)[0]; openAbsence(el.dataset.who, el.dataset.day, ex ? ex.id : null); break; }
+    case "absnew": e.preventDefault(); openAbsence(team()[0] || "", today()); break;
+    case "absf": absSync(); ABSF[el.dataset.k] = id; drawAbsence(); break;
+    case "absedit": openAbsence(null, null, id); break;
+    case "abssave": saveAbsence(); break;
+    case "absdel": if(el.dataset.sure){ S.absences = (S.absences || []).filter(a => a.id !== id); await savePeople(S.peopleList || [], team()); closeSheet(); toast("Abwesenheit gelöscht."); } else { el.dataset.sure = "1"; el.textContent = "Wirklich löschen?"; } break;
     case "lmode": S.listMode = id; try { localStorage.setItem("wb_listmode", id); } catch(_){} render(); break;
     case "pteam": await setTeam(id, el.checked); openPeople(); break;
     case "pdel": await savePeople((S.peopleList || []).filter(n => n.toLowerCase() !== id.toLowerCase())); if(S.listWho === id) S.listWho = "alle"; openPeople(); break;
@@ -1826,6 +1950,7 @@ async function addPlanEntry(){
   setTimeout(() => $("#padd") && $("#padd").focus(), 0);
 }
 document.addEventListener("toggle", e => {
+  if(e.target.matches && e.target.matches("details.pres")) S.presOpen = e.target.open;
   const d = e.target; if(!d.matches || !d.matches("details.meet")) return;
   const id = d.id.slice(5); if(d.open) S.openMeet = id; else if(S.openMeet === id) S.openMeet = null;
 }, true);
@@ -1835,6 +1960,7 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("change", e => {
   const el = e.target;
+  if(ABSF && (el.id === "abw" || el.id === "abf")){ absSync(); if(el.id === "abf" && (!ABSF.to || ABSF.to < ABSF.from) && !ABSF.weekly) ABSF.to = ABSF.from; drawAbsence(); return; }
   if(el.dataset.ex && EX){ exSync(); if(el.dataset.ex === "pick"){ const n = EX.rows.filter(r => r.pick && !r.done && r.title.trim()).length; el.closest(".exrow").classList.toggle("on", el.checked); const b = $("[data-act=exsave]"); if(b){ b.disabled = !n; b.textContent = `${n} ${n === 1 ? "Aufgabe" : "Aufgaben"} erstellen`; } } return; }
   if(el.dataset.act === "ptime"){ const t = S.tasks.find(x => x.id === el.dataset.id); if(!t) return;
     const v = el.value.trim(); let r = { time: null, end: null };
