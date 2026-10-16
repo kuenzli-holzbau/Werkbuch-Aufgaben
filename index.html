@@ -156,12 +156,13 @@ nav.tabs button[aria-current="page"]{color:var(--accent)}
 .exrow.done{align-items:center;opacity:.6}
 .exrow.done .ck{color:var(--accent);font-weight:800}
 .exrow input[type=text]{padding:8px 10px}
-body.wide .wrap{max-width:1500px}
+body.wide .wrap{max-width:none;padding-inline:24px}
 .seg{flex:none}
-.board{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start}
+/* alle Listen nebeneinander in einer Reihe; wird es zu eng, wird seitlich gescrollt statt umgebrochen */
+.board{display:grid;gap:12px;align-items:start;overflow-x:auto;padding-bottom:8px}
+@media (max-width:700px){.board{grid-template-columns:1fr !important;overflow:visible}}
 .bcol{background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:10px;min-width:0;transition:background .15s,border-color .15s}
 .bcol.main{background:var(--surface);border-color:var(--accent)}
-@media (min-width:1100px){.bcol.main{grid-column:span 2}}
 .bcol header{display:flex;align-items:center;gap:8px;padding:2px 4px 10px;flex-wrap:wrap}
 .bcol header b{white-space:nowrap}
 .bcol header .sub{font-size:.78rem}
@@ -431,7 +432,7 @@ async function savePeople(list, team){
 function canonWho(v){ v = cleanWho(v); if(!v) return null; const hit = people().find(p => p.name.toLowerCase() === v.toLowerCase()); return hit ? hit.name : v; }
 const initials = n => n.split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
 let sb = null; // Supabase-Client
-const BUCKET = "anhaenge", COLS = ["areas", "tasks", "meetings"], APP_VERSION = "V8";
+const BUCKET = "anhaenge", COLS = ["areas", "tasks", "meetings"], APP_VERSION = "V8.1";
 const areaById = id => S.areas.find(a => a.id === id);
 const color = a => a ? a.color : "var(--muted)";
 const openTasks = () => S.tasks.filter(t => !t.done);
@@ -1152,12 +1153,12 @@ function viewBoard(ts){
   if(other.length) cols.push({ key: "__other", name: "Andere Personen", sub: "nicht im Team", items: other });
   return `${!tm.length ? `<div class="hidden-note" style="margin-top:12px"><span>Noch kein Team eingetragen. Lege fest, welche Mitarbeitenden Aufgaben für dich übernehmen.</span><button class="btn pri" data-act="ppl">Team festlegen</button></div>` : ""}
     ${tm.length ? `<details class="fold pres" ${S.presOpen !== false ? "open" : ""}><summary>Anwesenheit nächste 2 Wochen <button class="btn ghost sm" data-act="absnew">+ Abwesenheit eintragen</button></summary>${presenceGrid(tm, nextWorkdays(10))}</details>` : ""}
-    <div class="board" style="margin-top:14px">${cols.map(c => `<section class="bcol ${c.key === "" ? "main" : ""}" data-drop="${esc(c.key)}">
+    <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn ghost sm" data-act="ppl">Team bearbeiten</button></div>
+    <div class="board" style="margin-top:6px;grid-template-columns:minmax(340px,1.7fr) repeat(${cols.length - 1}, minmax(230px,1fr))">${cols.map(c => `<section class="bcol ${c.key === "" ? "main" : ""}" data-drop="${esc(c.key)}">
       <header>${c.key && c.key !== "__other" ? `<span class="av">${esc(initials(c.name))}</span>` : ""}<b>${esc(c.name)}</b>${c.sub ? ` <span class="sub">${c.sub}</span>` : ""}<span class="mono n">${c.items.length}</span>
         ${c.key && c.key !== "__other" ? (() => { const v = availability(c.key, today()); return v === "da" || v === "we" ? `<span class="pres-st da">heute da</span>` : `<button class="pres-st weg" data-act="abscell" data-who="${esc(c.key)}" data-day="${today()}">${esc(absLabel(c.key, today()))}</button>`; })() : ""}</header>
       <div class="list compact">${c.items.map(t => taskRow(t, { drag: true, hideWho: c.key && c.key !== "__other" })).join("") || `<div class="bempty">${c.key === "" ? "Alles verteilt." : "Keine offenen Aufgaben. Hierher ziehen zum Zuweisen."}</div>`}</div>
-    </section>`).join("")}
-    <section class="bcol add"><button class="btn ghost" data-act="ppl">+ Team bearbeiten</button></section></div>`;
+    </section>`).join("")}</div>`;
 }
 /* ---------- Abwesenheiten ---------- */
 const ABS_TYPES = { ferien: ["Ferien", "F", "#2F6FB0"], krank: ["Krank", "K", "#C23B55"], schule: ["Schule", "S", "#2E8B6A"], kurs: ["Kurs", "Ku", "#7A55B8"], militaer: ["Militär", "M", "#6B7A3A"], kompensation: ["Kompensation", "Ko", "#C08A00"], andere: ["Abwesend", "A", "#6B746F"] };
